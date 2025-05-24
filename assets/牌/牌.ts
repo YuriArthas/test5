@@ -1,5 +1,6 @@
-import { _decorator, Button, Component, Sprite } from "cc";
+import { _decorator, Button, Component, Sprite, Prefab, instantiate, Node } from "cc";
 import { 静态配置 } from "../静态配置";
+import resourceManager from "../battle/ResourceManager";
 
 const { ccclass, property } = _decorator;
 
@@ -13,8 +14,13 @@ export class 牌 extends Component {
     @property(Button)
     public 牌Button: Button = null;
 
-    @property
-    public 牌名称: String = "请填写!";
+    protected start(): void {
+        this.node.on(Button.EventType.CLICK, this.on_牌Button_click, this);
+    }
+
+    on_牌Button_click() {
+        console.log("牌Button被点击了");
+    }
 }
 
 
@@ -22,6 +28,7 @@ export class 牌 extends Component {
 export class 牌数据 {
     name: string;
     sub_card: 牌数据[];
+    prefab: string;
 
     static equal(a: 牌数据, b: 牌数据): boolean {
         return a.name === b.name;
@@ -77,5 +84,11 @@ export class 牌数据 {
         }
         
         return true;
+    }
+
+    create_card(): Node {
+        const card = resourceManager.get_assets<Prefab>(this.prefab);
+        const node = instantiate(card);
+        return node;
     }
 }

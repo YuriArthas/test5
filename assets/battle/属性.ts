@@ -1,22 +1,8 @@
-import { assert, Component } from "cc";
+import { assert } from "cc";
+import { I属性管理器 } from "./I属性管理器";
 
 
 
-export class 属性管理器 extends Component{
-    属性Map: Map<string, 属性> = new Map();
-
-    get_attr(name: string, create_if_not_exist: boolean = true): 属性 {
-        let attr = this.属性Map.get(name);
-        if(attr == undefined) {
-            if(create_if_not_exist){
-                attr = 属性静态注册器.创建(name, this);
-                this.属性Map.set(name, attr);
-            }
-        }
-        
-        return attr;
-    }
-}
 
 export class 属性Modifier {
     readonly 类型: "add" | "mul";
@@ -30,7 +16,7 @@ export class 属性Modifier {
     }
 }
 
-type type属性构造函数 = new (管理器: 属性管理器, base_value: number) => 属性;
+type type属性构造函数 = new (管理器: I属性管理器, base_value: number) => 属性;
 type type属性创建Factory = {
     constructor_func: type属性构造函数;
     base_value: number;
@@ -53,7 +39,7 @@ export class 属性静态注册器 {
         throw new Error(`属性 ${name} 不存在`);
     }
 
-    static 创建(name: string, 管理器: 属性管理器, base_value: number = undefined): 属性 {
+    static 创建(name: string, 管理器: I属性管理器, base_value: number = undefined): 属性 {
         const 工厂 = 属性静态注册器.获取(name);
         if(工厂 === undefined) {
             throw new Error(`属性 ${name} 不存在`);
@@ -80,8 +66,8 @@ export class 属性静态注册器 {
 }
 
 export class 属性 {
-    readonly 管理器: 属性管理器;
-    constructor(管理器: 属性管理器, base_value: number) {
+    readonly 管理器: I属性管理器;
+    constructor(管理器: I属性管理器, base_value: number) {
         this.管理器 = 管理器;
         this._base_value = base_value;
         this._value = base_value;

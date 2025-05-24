@@ -4,6 +4,7 @@ export enum 牌名字 {
     拳头 = "拳头",
     剑 = "剑",
     超级剑 = "超级剑",
+
 }
 
 export class 静态配置 {
@@ -21,19 +22,19 @@ export class 静态配置 {
 
     constructor() {
         // 创建所有牌
-        this.push_card({name: 牌名字.拳头, sub_card: []});
-        this.push_card({name: 牌名字.剑, sub_card: []});
-        this.push_card({name: 牌名字.超级剑, sub_card: [牌名字.拳头, 牌名字.剑]});
+        this.push_card({name: 牌名字.拳头, sub_card: [], prefab: "7ffb1903-ee15-4360-9cb3-6ed7327aa9c6"});
+        this.push_card({name: 牌名字.剑, sub_card: [], prefab: "cf6ce125-3db4-435c-8fd4-2eaeac07fb8b"});
+        this.push_card({name: 牌名字.超级剑, sub_card: [牌名字.拳头, 牌名字.剑], prefab: "ecf4b454-695c-44f1-b50a-966d96be27cf"});
 
         this.处理牌子引用();
     }
 
-    private push_card(config: {name: string, sub_card: string[]}) {
+    private push_card(config: {name: string, sub_card: string[], prefab: string}) {
         // 创建新的牌数据
         const card = new 牌数据();
         card.name = config.name;
         card.sub_card = [];
-        
+        card.prefab = config.prefab;
         // 先将牌添加到Map中，以便后续引用
         this.牌数据Map.set(config.name, card);
         
