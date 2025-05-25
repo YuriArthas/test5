@@ -1,5 +1,5 @@
 import { _decorator, Component, Node, Button } from 'cc';
-import { 牌数据 } from '../牌/牌数据';
+import { 牌数据 } from './牌数据';
 const { ccclass, property } = _decorator;
 
 export enum 牌状态 {

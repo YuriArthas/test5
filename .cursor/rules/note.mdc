@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+如果没有要求, 不要写注释
+
+如果没有要求, 不要写测试代码
+
+如果没有要求, 不要写log代码
+
+
+
+

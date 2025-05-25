@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, Sprite, Prefab, instantiate, Node } from "cc";
+import { _decorator, Button, Component, Sprite, Prefab, instantiate, Node, Label } from "cc";
 import { 静态配置 } from "../静态配置";
 import resourceManager from "../battle/ResourceManager";
 import { 牌 } from "../battle/牌";
@@ -14,7 +14,7 @@ const { ccclass, property } = _decorator;
 export class 牌数据 {
     name: string;
     sub_card: 牌数据[];
-    prefab: string;
+    prefab?: string;
 
     static equal(a: 牌数据, b: 牌数据): boolean {
         return a.name === b.name;
@@ -73,10 +73,20 @@ export class 牌数据 {
     }
 
     create_card(): Node {
-        const card = resourceManager.get_assets<Prefab>(this.prefab);
-        const node = instantiate(card);
-        const 牌组件 = node.addComponent(牌);
+        let prefab_path = this.prefab;
+        const prefab = resourceManager.get_assets<Prefab>(prefab_path);
+        const card = instantiate(prefab);
+        const 牌组件 = card.addComponent(牌);
         牌组件.牌数据 = this;
-        return node;
+        if(prefab_path == 静态配置.通用牌prefab_path) {  // 通用牌
+            const LabelNode = card.getChildByName("Label");
+            if(LabelNode){
+                const label = LabelNode.getComponent(Label);
+                if(label){
+                    label.string = this.name;
+                }
+            }
+        }
+        return card;
     }
 }

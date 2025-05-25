@@ -1,9 +1,9 @@
 import { _decorator, assert, assetManager, Button, CCInteger, Component, instantiate, Node, Prefab, UITransform, Vec3 } from 'cc';
 import { 局数据 } from './存档';
-import { 牌数据 } from '../牌/牌数据';
+import { 牌数据 } from './牌数据';
 import { 属性管理器 } from './属性管理器';
 import { 属性 } from './属性';
-import { 牌名字, 静态配置 } from '../静态配置';
+import { 静态配置 } from '../静态配置';
 import resourceManager from './ResourceManager';
 import { 牌, 牌状态 } from './牌';
 const { ccclass, property } = _decorator;
@@ -97,32 +97,31 @@ export class battle extends Component {
         this.合成按钮.getComponent(Button).interactable = false;
     }
 
-    async on_第一次注入牌按钮_click() {
+    do_random_card(count: number){
+        const 所有牌数据 = Array.from(静态配置.instance.牌数据Map.values());
+        
+        for(let i = 0; i < count; i++){
+            const 随机索引 = this.random_int(0, 所有牌数据.length);
+            const 随机牌数据 = 所有牌数据[随机索引];
+            const card = 随机牌数据.create_card();
+            this.牌物品栏.addChild(card);
+
+            const 牌组件 = card.getComponent(牌);
+            牌组件.牌状态 = 牌状态.在牌物品栏;
+            
+            card.on('牌被点击', this.on_牌_click, this);
+        }
+    }
+
+    on_第一次注入牌按钮_click() {
         this.第一次注入牌按钮.active = false;
-        this.合成区域.active = true;
 
         // 简单的清理方式：清理所有以当前组件为target的"牌被点击"事件
         this.node.targetOff(this);
 
         const count = this.random_int(this.属性管理器.get_attr("骰子最小数量").value, this.属性管理器.get_attr("骰子最大数量").value + 1);
-        const card_size = this.合成结果显示面板.getComponent(UITransform).contentSize;
-        const region_size = this.牌物品栏.getComponent(UITransform).contentSize;
-        assert(region_size.width % card_size.width == 0, "牌物品栏宽度不是牌的整数倍");
         
-        for(let i = 0; i < count; i++){
-            const 拳头牌数据 = 静态配置.instance.牌数据Map.get(牌名字.拳头);
-            const card = 拳头牌数据.create_card();
-            this.牌物品栏.addChild(card);
-
-            // 添加牌组件
-            const 牌组件 = card.getComponent(牌);
-            牌组件.牌状态 = 牌状态.在牌物品栏;
-            
-            // 简单的事件监听
-            card.on('牌被点击', this.on_牌_click, this);
-            
-            
-        }
+        this.do_random_card(count);
     }
 
     refresh_合成结果(){
@@ -163,7 +162,9 @@ export class battle extends Component {
     }
 
     on_牌确认按钮_click() {
-
+        this.牌确认按钮.active = false;
+        this.随机按钮.active = false;
+        this.合成区域.active = true;
     }
 
     on_合成按钮_click() {
@@ -183,7 +184,12 @@ export class battle extends Component {
     }
 
     on_随机按钮_click() {
-
+        const count = this.牌物品栏.children.length;
+        [...this.牌物品栏.children].forEach(child => {
+            child.destroy();
+        });
+        
+        this.do_random_card(count);
     }
 
     /**
