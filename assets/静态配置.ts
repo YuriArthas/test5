@@ -1,4 +1,4 @@
-import { 牌数据 } from "./牌/牌";
+import { 牌数据 } from "./牌/牌数据";
 
 export enum 牌名字 {
     拳头 = "拳头",

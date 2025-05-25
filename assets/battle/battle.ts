@@ -1,9 +1,11 @@
 import { _decorator, assert, assetManager, Button, CCInteger, Component, instantiate, Node, Prefab, UITransform, Vec3 } from 'cc';
 import { 局数据 } from './存档';
+import { 牌数据 } from '../牌/牌数据';
 import { 属性管理器 } from './属性管理器';
 import { 属性 } from './属性';
 import { 牌名字, 静态配置 } from '../静态配置';
 import resourceManager from './ResourceManager';
+import { 牌, 牌状态 } from './牌';
 const { ccclass, property } = _decorator;
 
 class BattleInitData {
@@ -37,15 +39,6 @@ export class battle extends Component {
     public 合成结果显示面板: Node = null;
 
     @property(Node)
-    public 合成槽位0: Node = null;
-
-    @property(Node)
-    public 合成槽位1: Node = null;
-
-    @property(Node)
-    public 合成槽位2: Node = null;
-
-    @property(Node)
     public 战斗开始按钮: Node = null;
 
     @property(Node)
@@ -56,6 +49,9 @@ export class battle extends Component {
 
     @property(CCInteger)
     public 随机数种子: number = 0;
+
+    @property(Node)
+    public 合成物品栏: Node = null;
 
     private 局数据: 局数据 = undefined;
 
@@ -87,8 +83,6 @@ export class battle extends Component {
             this.随机数种子 = Math.floor(Math.random() * 1000000);
         }
 
-
-
         this.合成区域.active = false;
 
         this.第一次注入牌按钮.on(Button.EventType.CLICK, this.on_第一次注入牌按钮_click, this);
@@ -99,27 +93,73 @@ export class battle extends Component {
 
         this.属性管理器.属性Map.set("骰子最小数量", new 属性(this.属性管理器, 静态配置.instance.骰子个数基础最小值));
         this.属性管理器.属性Map.set("骰子最大数量", new 属性(this.属性管理器, 静态配置.instance.骰子个数基础最大值));
+
+        this.合成按钮.getComponent(Button).interactable = false;
     }
 
     async on_第一次注入牌按钮_click() {
         this.第一次注入牌按钮.active = false;
         this.合成区域.active = true;
 
+        // 简单的清理方式：清理所有以当前组件为target的"牌被点击"事件
+        this.node.targetOff(this);
+
         const count = this.random_int(this.属性管理器.get_attr("骰子最小数量").value, this.属性管理器.get_attr("骰子最大数量").value + 1);
         const card_size = this.合成结果显示面板.getComponent(UITransform).contentSize;
         const region_size = this.牌物品栏.getComponent(UITransform).contentSize;
         assert(region_size.width % card_size.width == 0, "牌物品栏宽度不是牌的整数倍");
-
-        const col_count = region_size.width / card_size.width;
+        
         for(let i = 0; i < count; i++){
             const 拳头牌数据 = 静态配置.instance.牌数据Map.get(牌名字.拳头);
             const card = 拳头牌数据.create_card();
             this.牌物品栏.addChild(card);
-            const x = ((i % col_count) + 0.5) * card_size.width;
-            const y = (Math.floor(i / col_count) + 0.5) * card_size.height;
-            card.setPosition(new Vec3(x, y, 0));
+
+            // 添加牌组件
+            const 牌组件 = card.getComponent(牌);
+            牌组件.牌状态 = 牌状态.在牌物品栏;
+            
+            // 简单的事件监听
+            card.on('牌被点击', this.on_牌_click, this);
+            
+            
         }
+    }
+
+    refresh_合成结果(){
+        const old = this.合成结果显示面板.getChildByName("合成结果");
+        if(old){
+            old.destroy();
+        }
+
+        const 合成结果 = 牌数据.尝试合成(this.合成物品栏.children.map(child => child.getComponent(牌).牌数据));
+        if(合成结果){
+            const 合成结果牌 = 合成结果.create_card();
+            合成结果牌.getComponent(牌).牌状态 = 牌状态.在合成结果显示面板;
+            合成结果牌.name = "合成结果";
+            合成结果牌.setParent(this.合成结果显示面板);
+            this.合成按钮.getComponent(Button).interactable = true;
+        }else{
+            this.合成按钮.getComponent(Button).interactable = false;
+        }
+
+    }
+
+    /**
+     * 处理牌被点击的事件
+     */
+    on_牌_click(牌组件: 牌) {
         
+        if(牌组件.牌状态 == 牌状态.在牌物品栏){
+            if(this.合成物品栏.children.length < 3){
+                牌组件.牌状态 = 牌状态.在合成区域;
+                牌组件.node.setParent(this.合成物品栏);
+                this.refresh_合成结果();
+            }
+        }else if(牌组件.牌状态 == 牌状态.在合成区域){
+            牌组件.牌状态 = 牌状态.在牌物品栏;
+            牌组件.node.setParent(this.牌物品栏);
+            this.refresh_合成结果();
+        }
     }
 
     on_牌确认按钮_click() {
@@ -127,7 +167,15 @@ export class battle extends Component {
     }
 
     on_合成按钮_click() {
-
+        const card = this.合成结果显示面板.getChildByName("合成结果");
+        if(card){
+            card.setParent(this.牌物品栏);
+            card.getComponent(牌).牌状态 = 牌状态.在牌物品栏;
+            const arr = this.合成物品栏.children.map(child => child);
+            arr.forEach(child => {
+                child.destroy();
+            });
+        }
     }
 
     on_战斗开始按钮_click() {
@@ -138,7 +186,13 @@ export class battle extends Component {
 
     }
 
-
+    /**
+     * 组件销毁时清理所有事件监听
+     */
+    protected onDestroy(): void {
+        // 清理所有以当前组件为target的事件监听
+        this.node.targetOff(this);
+    }
 
     update(deltaTime: number) {
         

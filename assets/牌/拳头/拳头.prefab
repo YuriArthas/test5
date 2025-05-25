@@ -28,13 +28,10 @@
       },
       {
         "__id__": 6
-      },
-      {
-        "__id__": 8
       }
     ],
     "_prefab": {
-      "__id__": 10
+      "__id__": 8
     },
     "_lpos": {
       "__type__": "cc.Vec3",
@@ -198,31 +195,6 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "2a1g4KM99GpL/U4ykX/A6Y"
-  },
-  {
-    "__type__": "d58bfARnllNSpxgoZLGXz35",
-    "_name": "",
-    "_objFlags": 0,
-    "__editorExtras__": {},
-    "node": {
-      "__id__": 1
-    },
-    "_enabled": true,
-    "__prefab": {
-      "__id__": 9
-    },
-    "牌图片": {
-      "__id__": 4
-    },
-    "牌Button": {
-      "__id__": 6
-    },
-    "牌名称": "拳头",
-    "_id": ""
-  },
-  {
-    "__type__": "cc.CompPrefabInfo",
-    "fileId": "deFOo3nrVCLpKgfVpSd9vs"
   },
   {
     "__type__": "cc.PrefabInfo",
