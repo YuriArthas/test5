@@ -22,3 +22,4 @@ node_modules/
 # WebStorm
 #//////////////////////////
 .idea/
+upload_config.json

@@ -9,65 +9,46 @@ export enum 牌状态 {
     在合成结果显示面板 = '在合成结果显示面板',
 }
 
+export enum 牌目标 {
+    自己 = '自己',
+    己方1 = '己方1',
+    敌方1 = '敌方1',
+    己方N = '己方N',
+    敌方N = '敌方N',
+}
+
+export interface I牌数据 {
+    name: string;
+    合成材料: I牌数据[];
+    prefab?: string;
+    component?: new () => 牌;
+
+    aim: 牌目标;
+
+    num?: {
+        min: number;
+        max: number;
+    }
+
+    create_card(): Node;
+}
+
 @ccclass('牌')
 export class 牌 extends Component {
-    @property
     public 牌状态: 牌状态 = 牌状态.None;
 
-    @property
-    public 牌数据: 牌数据 = null;
+    public 牌数据: I牌数据 = null;
 
     start() {
-        // 设置点击事件
-        this.setupClickEvent();
         
-        // 初始化牌显示
-        this.更新牌显示();
     }
 
-    /**
-     * 设置点击事件
-     */
-    private setupClickEvent(): void {
-        // 确保节点有Button组件，如果没有则添加
-        let buttonComponent = this.getComponent(Button);
-        if (!buttonComponent) {
-            buttonComponent = this.addComponent(Button);
-        }
 
-        // 监听点击事件
-        this.node.on(Button.EventType.CLICK, this.on_牌Button_click, this);
-    }
-
-    /**
-     * 牌被点击时的处理
-     */
-    private on_牌Button_click(): void {
-        console.log("牌被点击了", this.牌数据);
-        
-        // 发送自定义事件给父节点
-        this.node.emit('牌被点击', this);
-    }
-
-    /**
-     * 更新牌的显示
-     */
-    private 更新牌显示(): void {
-        // 这里可以根据牌数据更新牌的外观
-        // 比如更换贴图、文字等
-        if (this.牌数据) {
-            console.log("更新牌显示:", this.牌数据);
-        }
-    }
 
     /**
      * 销毁时清理
      */
     protected onDestroy(): void {
-        // 清理Button点击事件
-        this.node.off(Button.EventType.CLICK, this.on_牌Button_click, this);
-        
-        // 清理所有"牌被点击"事件监听器（一次性清理所有外部监听）
-        this.node.off('牌被点击');
+        this.node.off(Button.EventType.CLICK);
     }
 } 

@@ -1,26 +1,29 @@
 import { _decorator, Button, Component, Sprite, Prefab, instantiate, Node, Label } from "cc";
 import { 静态配置 } from "../静态配置";
 import resourceManager from "../battle/ResourceManager";
-import { 牌 } from "../battle/牌";
+import { 牌, I牌数据, 牌目标 } from "../battle/牌";
+import { AbilitySystemComponent } from "./GAS/AbilitySystemComponent";
 
 const { ccclass, property } = _decorator;
 
- 
-
-
-
-
-
-export class 牌数据 {
+export class 牌数据 implements I牌数据 {
     name: string;
-    sub_card: 牌数据[];
+    合成材料: I牌数据[];
     prefab?: string;
+    component?: new () => 牌;
 
-    static equal(a: 牌数据, b: 牌数据): boolean {
+    aim: 牌目标;
+
+    num?: {
+        min: number;
+        max: number;
+    }
+
+    static equal(a: I牌数据, b: I牌数据): boolean {
         return a.name === b.name;
     } 
 
-    static 尝试合成(list: 牌数据[]): 牌数据 {
+    static 尝试合成(list: I牌数据[]): I牌数据 {
         if (list.length === 0) {
             return undefined;
         }
@@ -30,7 +33,7 @@ export class 牌数据 {
         
         // 遍历所有牌，检查是否有牌的sub_card与list匹配
         for (const [name, card] of config.牌数据Map.entries()) {
-            if (this.牌数组相等(list, card.sub_card)) {
+            if (this.牌数组相等(list, card.合成材料)) {
                 return card;
             }
         }
@@ -39,7 +42,7 @@ export class 牌数据 {
     }
     
     // 辅助方法：检查两个牌数组是否相等（不考虑顺序）
-    private static 牌数组相等(list1: 牌数据[], list2: 牌数据[]): boolean {
+    private static 牌数组相等(list1: I牌数据[], list2: I牌数据[]): boolean {
         if (list1.length !== list2.length) {
             return false;
         }
@@ -76,8 +79,6 @@ export class 牌数据 {
         let prefab_path = this.prefab;
         const prefab = resourceManager.get_assets<Prefab>(prefab_path);
         const card = instantiate(prefab);
-        const 牌组件 = card.addComponent(牌);
-        牌组件.牌数据 = this;
         if(prefab_path == 静态配置.通用牌prefab_path) {  // 通用牌
             const LabelNode = card.getChildByName("Label");
             if(LabelNode){
@@ -87,6 +88,12 @@ export class 牌数据 {
                 }
             }
         }
+
+        card.addComponent(AbilitySystemComponent);
+
+        const 牌组件 = card.addComponent(this.component);
+        牌组件.牌数据 = this;
+        
         return card;
     }
 }

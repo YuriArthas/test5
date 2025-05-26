@@ -106,10 +106,10 @@ export class battle extends Component {
             const card = 随机牌数据.create_card();
             this.牌物品栏.addChild(card);
 
-            const 牌组件 = card.getComponent(牌);
+            const 牌组件 = card.getComponent(随机牌数据.component);
             牌组件.牌状态 = 牌状态.在牌物品栏;
             
-            card.on('牌被点击', this.on_牌_click, this);
+            card.on(Button.EventType.CLICK, this.on_牌_click, this);
         }
     }
 
