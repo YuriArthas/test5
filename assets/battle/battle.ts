@@ -1,11 +1,11 @@
 import { _decorator, assert, assetManager, Button, CCInteger, Component, instantiate, Node, Prefab, UITransform, Vec3 } from 'cc';
 import { 局数据 } from './存档';
 import { 牌数据 } from './牌数据';
-import { 属性管理器 } from './属性管理器';
-import { 属性 } from './属性';
 import { 静态配置 } from '../静态配置';
+import { 属性 } from './GAS/属性';
 import resourceManager from './ResourceManager';
 import { 牌, 牌状态 } from './牌';
+import { GAS_AbilitySystem } from './GAS/AbilitySystemComponent';
 const { ccclass, property } = _decorator;
 
 class BattleInitData {
@@ -43,9 +43,6 @@ export class battle extends Component {
 
     @property(Node)
     public 第一次注入牌按钮: Node = null;
-
-    @property(属性管理器)
-    public 属性管理器: 属性管理器 = null;
 
     @property(CCInteger)
     public 随机数种子: number = 0;
@@ -91,8 +88,8 @@ export class battle extends Component {
         this.合成按钮.on(Button.EventType.CLICK, this.on_合成按钮_click, this);
         this.战斗开始按钮.on(Button.EventType.CLICK, this.on_战斗开始按钮_click, this);
 
-        this.属性管理器.属性Map.set("骰子最小数量", new 属性(this.属性管理器, 静态配置.instance.骰子个数基础最小值));
-        this.属性管理器.属性Map.set("骰子最大数量", new 属性(this.属性管理器, 静态配置.instance.骰子个数基础最大值));
+        this.GAS.属性Map.set("骰子最小数量", new 属性(this.GAS, 静态配置.instance.骰子个数基础最小值));
+        this.GAS.属性Map.set("骰子最大数量", new 属性(this.GAS, 静态配置.instance.骰子个数基础最大值));
 
         this.合成按钮.getComponent(Button).interactable = false;
     }
@@ -119,7 +116,7 @@ export class battle extends Component {
         // 简单的清理方式：清理所有以当前组件为target的"牌被点击"事件
         this.node.targetOff(this);
 
-        const count = this.random_int(this.属性管理器.get_attr("骰子最小数量").value, this.属性管理器.get_attr("骰子最大数量").value + 1);
+        const count = this.random_int(this.GAS.get_attr("骰子最小数量").value, this.GAS.get_attr("骰子最大数量").value + 1);
         
         this.do_random_card(count);
     }
