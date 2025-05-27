@@ -692,7 +692,7 @@
     "_fillStart": 0,
     "_fillRange": 0,
     "_isTrimmedMode": true,
-    "_useGrayscale": false, 
+    "_useGrayscale": false,
     "_atlas": null,
     "_id": "21ziWJKmhB2ZnfyZLJWpxB"
   },
@@ -724,7 +724,7 @@
     "第一次注入牌按钮": {
       "__id__": 15
     },
-    "随机数种子": 0,
+    "随机数种子": 1,
     "合成物品栏": null,
     "_id": "58s9LEwB1Pnbl4cwrgRY0m"
   },

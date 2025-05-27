@@ -4,19 +4,9 @@ import { GAS_AbilitySystem as GAS_AbilitySystem } from "./AbilitySystemComponent
 
 
 
-export class 属性Modifier {
-    readonly 类型: "add" | "mul";
-    值: number;
-    source: any;
-    
-    constructor(类型: "add" | "mul", 值: number, source: any = undefined) {
-        this.类型 = 类型;
-        this.值 = 值;
-        this.source = source;
-    }
-}
+type 属性Modifier_op = "add" | "mul" | "min" | "max" | "set" | "mul_mul" | "add_add";
 
-type type属性构造函数 = new (管理器: GAS_AbilitySystem, base_value: number) => 属性;
+type type属性构造函数 = new () => Attr;
 type type属性创建Factory = {
     constructor_func: type属性构造函数;
     base_value: number;
@@ -39,7 +29,7 @@ export class 属性静态注册器 {
         throw new Error(`属性 ${name} 不存在`);
     }
 
-    static 创建(name: string, 管理器: GAS_AbilitySystem, base_value: number = undefined): 属性 {
+    static 创建(name: string, 管理器: GAS_AbilitySystem, base_value: number = undefined): Attr {
         const 工厂 = 属性静态注册器.获取(name);
         if(工厂 === undefined) {
             throw new Error(`属性 ${name} 不存在`);
@@ -52,223 +42,251 @@ export class 属性静态注册器 {
             }
         }
 
-        const 属性 = new 工厂.constructor_func(管理器, base_value);
+        const attr = new 工厂.constructor_func();
+        if(!管理器) {
+            attr._GAS = 管理器;
+        }
+        attr.base_value = base_value;
         if(工厂.max_attr_name){
-            属性.max_attr_name = 工厂.max_attr_name;
+            const max_attr = 管理器.get_attr(工厂.max_attr_name, false);
+            assert(max_attr !== undefined, `属性 ${工厂.max_attr_name} 不存在`);
+            attr.add_modifier(max_attr);
         }
         if(工厂.min_attr_name){
-            属性.min_attr_name = 工厂.min_attr_name;
+            const min_attr = 管理器.get_attr(工厂.min_attr_name, false);
+            assert(min_attr !== undefined, `属性 ${工厂.min_attr_name} 不存在`);
+            attr.add_modifier(min_attr);
         }
-        return 属性;
+        return attr;
     }
 
     static 属性构造Map: Map<string, type属性创建Factory> = new Map();
 }
 
-export class 属性 {
-    readonly 管理器: GAS_AbilitySystem;
-    constructor(管理器: GAS_AbilitySystem, base_value: number) {
-        this.管理器 = 管理器;
-        this._base_value = base_value;
-        this._value = base_value;
+export class Attr {
+    _GAS: GAS_AbilitySystem;
+    _dirty_publisher_array?: Attr[];
+    _dirty_subscriber_array?: Attr[];
+    protected _modifier_list?: Attr[];
+    _modifiler_op: 属性Modifier_op;
+
+    _dirty: boolean = true;
+    _base_value: number = 0;
+    _final_value: number = 0;
+    _min_value: number;
+    _max_value: number;
+    protected dirty_event_list: ((attr: Attr, old_value: number) => void)[] = undefined;
+
+    subscribe_dirty_change(obj: Attr): void {
+        if(this._dirty_subscriber_array === undefined) {
+            this._dirty_subscriber_array = [];
+        }
+        this._dirty_subscriber_array.push(obj);
+
+        if(obj._dirty_publisher_array === undefined){
+            obj._dirty_publisher_array = [];
+        }
+        obj._dirty_publisher_array.push(this);
+    }
+    unsubscribe_dirty_change(obj: Attr): void {
+        // 从当前对象的订阅者数组中移除 obj
+        if(this._dirty_subscriber_array !== undefined) {
+            const index = this._dirty_subscriber_array.indexOf(obj);
+            assert(index !== -1, "unsubscribe_dirty_change: 在当前对象的订阅者数组中找不到目标对象");
+            this._dirty_subscriber_array.splice(index, 1);
+            if(this._dirty_subscriber_array.length === 0) {
+                this._dirty_subscriber_array = undefined;
+            }
+        } else {
+            assert(false, "unsubscribe_dirty_change: 当前对象没有订阅者数组");
+        }
+
+        // 从 obj 的发布者数组中移除当前对象
+        if(obj._dirty_publisher_array !== undefined) {
+            const index = obj._dirty_publisher_array.indexOf(this);
+            assert(index !== -1, "unsubscribe_dirty_change: 在目标对象的发布者数组中找不到当前对象");
+            obj._dirty_publisher_array.splice(index, 1);
+            if(obj._dirty_publisher_array.length === 0) {
+                obj._dirty_publisher_array = undefined;
+            }
+        } else {
+            assert(false, "unsubscribe_dirty_change: 目标对象没有发布者数组");
+        }
     }
 
-    private _dirty: boolean = true;
+    disconnect_all_dirty_pubsub(): void {
+        // 断开所有订阅者关系
+        if(this._dirty_subscriber_array !== undefined) {
+            for(let subscriber of this._dirty_subscriber_array) {
+                // 从订阅者的发布者数组中移除当前对象
+                assert(subscriber._dirty_publisher_array !== undefined, "disconnect_all_dirty_pubsub: 订阅者没有发布者数组");
+                const index = subscriber._dirty_publisher_array.indexOf(this);
+                assert(index !== -1, "disconnect_all_dirty_pubsub: 在订阅者的发布者数组中找不到当前对象");
+                subscriber._dirty_publisher_array.splice(index, 1);
+                if(subscriber._dirty_publisher_array.length === 0) {
+                    subscriber._dirty_publisher_array = undefined;
+                }
+            }
+            this._dirty_subscriber_array = undefined;
+        }
+
+        // 断开所有发布者关系
+        if(this._dirty_publisher_array !== undefined) {
+            for(let publisher of this._dirty_publisher_array) {
+                // 从发布者的订阅者数组中移除当前对象
+                assert(publisher._dirty_subscriber_array !== undefined, "disconnect_all_dirty_pubsub: 发布者没有订阅者数组");
+                const index = publisher._dirty_subscriber_array.indexOf(this);
+                assert(index !== -1, "disconnect_all_dirty_pubsub: 在发布者的订阅者数组中找不到当前对象");
+                publisher._dirty_subscriber_array.splice(index, 1);
+                if(publisher._dirty_subscriber_array.length === 0) {
+                    publisher._dirty_subscriber_array = undefined;
+                }
+            }
+            this._dirty_publisher_array = undefined;
+        }
+    }
+
+    to_dirty(trigger_dirty_event: boolean): void {
+        if(this._dirty == true) {
+            return;
+        }
+
+        const dirty_list: [Attr, number][] = [];
+        Attr._dirty_and_collect(dirty_list, this);
+
+        if(trigger_dirty_event) {
+            for(let [elem, old_value] of dirty_list) {
+                if(elem.dirty_event_list) {
+                    for(let event of elem.dirty_event_list) {
+                        event(elem, old_value);
+                    }
+                }
+            }
+        }
+    }
+
     get dirty(): boolean {
         return this._dirty;
     }
-    to_dirty(trigger_dirty_event: boolean = true, recursive_dirty: boolean = true) {
-        if(this._dirty == false) {
-            this._dirty = true;
-            if(recursive_dirty) {
-                for(let elem of this.依赖我的Set) {
-                    elem.to_dirty(false, false);
-                }
-            }
-    
-            if(trigger_dirty_event) {
-                if(recursive_dirty) {
-                    for(let elem of this.依赖我的Set) {
-                        if(elem.dirty_event_list){
-                            for(let event of elem.dirty_event_list){
-                                event(elem, this._value);
-                            }
-                        }
-                    }
-                }
-    
-                if(this.dirty_event_list){
-                    for(let event of this.dirty_event_list){
-                        event(this, this._value);
-                    }
-                }
-            }
-        }
-    }
 
-    private _value: number = 0;
     get value(): number {
         if(this._dirty) {
-            const ref_stack: 属性[] = [];
-            this.do_recalculate(ref_stack);
+            this.do_refresh_value();
         }
-        return this._value;
+        return this._final_value;
     }
 
-    do_recalculate(ref_stack: 属性[]) {
-        assert(this._dirty, "属性未脏");
-        const len = ref_stack.length;
-        if(ref_stack){
-            if(ref_stack.indexOf(this) !== -1) {
-                throw new Error("属性循环依赖");
-            }
-            ref_stack.push(this);
-        }
-        let value = this.recalculate(ref_stack);
+    calc_self(): number {
+        let ret = this._base_value;
 
-        if(this._min_attr_name){
-            const min_attr = this.管理器.get_attr(this._min_attr_name, false);
-            if(min_attr){
-                for(const elem of ref_stack){
-                    min_attr.add_reffed_me(elem);
-                }
-                if(min_attr.dirty){
-                    min_attr.do_recalculate(ref_stack);
-                }
-                if(value < min_attr.value){
-                    value = min_attr.value;
-                }
-            }
-        }
-
-        if(this._max_attr_name){
-            const max_attr = this.管理器.get_attr(this._max_attr_name, false);
-            if(max_attr){
-                for(const elem of ref_stack){
-                    max_attr.add_reffed_me(elem);
-                }
-                if(max_attr.dirty){
-                    max_attr.do_recalculate(ref_stack);
-                }
-                if(value > max_attr.value){
-                    value = max_attr.value;
+        let mul = 1;
+        let mul_mul = 1;
+        
+        if(this._modifier_list !== undefined) {
+            for(let modifier of this._modifier_list) {
+                if(modifier.modifier_op === "add") {
+                    ret += modifier.value;
+                }else if(modifier.modifier_op === "mul") {
+                    mul += modifier.value;
+                }else if(modifier.modifier_op === "min") {
+                    this._min_value = modifier.value;
+                }else if(modifier.modifier_op === "max") {
+                    this._max_value = modifier.value;
+                }else if(modifier.modifier_op === "set") {
+                    this._base_value = modifier.value;
+                }else if(modifier.modifier_op === "mul_mul") {
+                    mul_mul *= modifier.value;
+                }else{
+                    assert(false, "属性Modifier_op 未实现");
                 }
             }
         }
 
-        ref_stack.length = len;
-        this._value = value;
+        return ret * mul * mul_mul;
+    }
+
+    do_refresh_value() {
+        this._final_value = this.calc_self();
+
+        if(this._min_value !== undefined) {
+            this._final_value = Math.max(this._final_value, this._min_value);
+        }
+
+        if(this._max_value !== undefined) {
+            this._final_value = Math.min(this._final_value, this._max_value);
+        }
+
         this._dirty = false;
     }
 
-    private _base_value: number = 0;
     get base_value(): number {
         return this._base_value;
     }
 
     set base_value(v: number) {
-        this.to_dirty(true, true);
         this._base_value = v;
+        this.to_dirty(true);
     }
 
-    private _modifier_add_list: 属性Modifier[] = undefined;
-    private _modifier_mul_list: 属性Modifier[] = undefined;
-    add_modifier(类型: "add" | "mul", 值: number, source: any = undefined) {
-        if(this._modifier_add_list === undefined) {
-            this._modifier_add_list = [];
+    get GAS(): GAS_AbilitySystem {
+        return this._GAS;
+    }
+
+    get min_value(): number {
+        return this._min_value?? -Infinity;
+    }
+    set min_value(v: number) {
+        this._min_value = v;
+        this.to_dirty(true);
+    }
+
+    get max_value(): number {
+        return this._max_value?? Infinity;
+    }
+    set max_value(v: number) {
+        this._max_value = v;
+        this.to_dirty(true);
+    }
+
+    add_modifier(modifier: Attr): void {
+        if(this._modifier_list === undefined) {
+            this._modifier_list = [];
         }
-        this._modifier_add_list.push(new 属性Modifier(类型, 值, source));
-        this.to_dirty(true, true);
-    }
-    remove_modifier(modifier: 属性Modifier) {
-        if(modifier.类型 === "add"){
-            if(this._modifier_add_list === undefined) {
-                return;
-            }
-            this._modifier_add_list = this._modifier_add_list.filter(modifier => modifier.source !== modifier.source);
-        }else{
-            if(this._modifier_mul_list === undefined) {
-                return;
-            }
-            this._modifier_mul_list = this._modifier_mul_list.filter(modifier => modifier.source !== modifier.source);
-        }
-
-        this.to_dirty(true, true);
+        this._modifier_list.push(modifier);
+        this.subscribe_dirty_change(modifier);
+        this.to_dirty(true);
     }
 
-    // private 我依赖的Set: Set<属性> = undefined;
-    private 依赖我的Set: Set<属性> = undefined;
-    private dirty_event_list: Set<(attr: 属性, old_value: number) => void> = undefined;
-
-    private _min_attr_name: string = undefined;
-    get min_attr_name(): string {
-        return this._min_attr_name;
-    }
-    set min_attr_name(v: string) {
-        this._min_attr_name = v;
-        this.to_dirty(true, true);
-    }
-
-    private _max_attr_name: string = undefined;
-    get max_attr_name(): string {
-        return this._max_attr_name;
-    }
-    set max_attr_name(v: string) {
-        this._max_attr_name = v;
-        this.to_dirty(true, true);
-    }
-
-    on_dirty(f: (attr: 属性, old_value: number) => void) {
-        if(this.dirty_event_list === undefined) {
-            this.dirty_event_list = new Set();
-        }
-        this.dirty_event_list.add(f);
-    }
-
-    off_dirty(f: (attr: 属性, old_value: number) => void) {
-        if(this.dirty_event_list === undefined) {
+    remove_modifier(modifier: Attr): void {
+        if(this._modifier_list === undefined) {
             return;
         }
-        this.dirty_event_list.delete(f);
+        this._modifier_list = this._modifier_list.filter(elem => elem !== modifier);
+        this.unsubscribe_dirty_change(modifier);
+        this.to_dirty(true);
     }
 
-    add_reffed_me(attr: 属性) {
-        if(this.依赖我的Set === undefined) {
-            this.依赖我的Set = new Set();
-        }
-        this.依赖我的Set.add(attr);
-    }
+    protected static _dirty_and_collect(list: [Attr, number][], attr: Attr){
+        attr._dirty = true;
+        list.push([attr, attr._final_value]);
 
-    get_or_create_dep_attr(name: string, ref_stack?: 属性[]): 属性 {
-        let attr = this.管理器.get_attr(name, true);
-
-        if(ref_stack){
-            for(let elem of ref_stack) {
-                attr.add_reffed_me(elem);
+        if(attr._dirty_subscriber_array) {
+            for(let elem of attr._dirty_subscriber_array) {
+                if(elem._dirty == false) {
+                    Attr._dirty_and_collect(list, elem);
+                }
             }
         }
-        return attr;
     }
 
-    calc_self(){
-        let ret = this.base_value;
-        
-        if(this._modifier_add_list !== undefined) {
-            for(let modifier of this._modifier_add_list) {
-                ret += modifier.值;
-            }
-        }
-
-        if(this._modifier_mul_list !== undefined) {
-            for(let modifier of this._modifier_mul_list) {
-                ret *= modifier.值;
-            }
-        }
-
-        return ret;
+    get source(): any {
+        return undefined;
     }
 
-    private recalculate(ref_stack?: 属性[]): number {
-        return this.calc_self();
+    get modifier_op(): 属性Modifier_op {
+        return this._modifiler_op?? "add";
     }
 }
+
+
+

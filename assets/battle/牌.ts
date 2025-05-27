@@ -43,7 +43,7 @@ export class 牌 extends Component {
         
     }
 
-
+    
 
     /**
      * 销毁时清理

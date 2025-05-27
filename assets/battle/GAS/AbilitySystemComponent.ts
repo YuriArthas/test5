@@ -1,6 +1,6 @@
 import { _decorator, Component, Node } from 'cc';
 import { GAS_Effect } from './Effect';
-import { 属性 } from './属性';
+import { Attr } from './属性';
 import { 属性静态注册器 } from './属性';
 const { ccclass, property } = _decorator;
 
@@ -83,20 +83,20 @@ export class TagManager {
         return names.map(name => this.apply(name));
     }
 }
- 
-export class TarContainer {
-    tags: ITagName[] = [];
+
+export interface ITarContainer {
+    tags: ITagName[];
 }
 
 @ccclass('GAS_AbilitySystem')
-export class GAS_AbilitySystem extends Component {
-    tagContainer: TarContainer = new TarContainer();
+export class GAS_AbilitySystem extends Component implements ITarContainer {
+    tags: ITagName[] = [];
 
     effects: GAS_Effect[] = [];
     
-    属性Map: Map<string, 属性> = new Map();
+    属性Map: Map<string, Attr> = new Map();
 
-    get_attr(name: string, create_if_not_exist: boolean = false): 属性 {
+    get_attr(name: string, create_if_not_exist: boolean = false): Attr {
         let attr = this.属性Map.get(name);
         if(attr == undefined) {
             if(create_if_not_exist){
