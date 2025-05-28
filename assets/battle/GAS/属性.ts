@@ -71,10 +71,18 @@ export class Attr {
     _modifiler_op: 属性Modifier_op;
 
     _dirty: boolean = true;
-    _base_value: number = 0;
-    _final_value: number = 0;
+    _base_value: number;
+    _final_value: number;
     _min_value: number;
     _max_value: number;
+
+    constructor(base_value: number, gas?: GAS) {
+        this._base_value = base_value;
+        if(gas) {
+            this.gas = gas;
+        }
+    }
+
     protected dirty_event_list: ((attr: Attr, old_value: number) => void)[] = undefined;
 
     subscribe_dirty_change(obj: Attr): void {
