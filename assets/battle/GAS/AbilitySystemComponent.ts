@@ -1,6 +1,7 @@
 import { _decorator, Component, Node } from 'cc';
 import { GAS_Effect } from './Effect';
 import { Attr } from './属性';
+import { Unit } from './Unit';
 const { ccclass, property } = _decorator;
 
 export interface ITagName {
@@ -84,7 +85,9 @@ export class TagManager {
 }
 
 export interface ITagContainer {
-    tags: ITagName[];
+    owned_tags: Map<ITagName, number>;
+    blocked_ability_tags: Map<ITagName, number>;
+    blocked_effect_tags: Map<ITagName, number>;
 }
 
 export class GAS_BaseComponent extends Component {
@@ -93,8 +96,11 @@ export class GAS_BaseComponent extends Component {
 
 @ccclass('GAS')
 export class GAS extends GAS_BaseComponent implements ITagContainer {
-    tags: ITagName[] = [];
-
+    unit: Unit;
+    owned_tags: Map<ITagName, number> = new Map();
+    blocked_ability_tags: Map<ITagName, number> = new Map();
+    blocked_effect_tags: Map<ITagName, number> = new Map();
+    
     effects: GAS_Effect[] = [];
     
     属性Map: Map<string, Attr> = new Map();

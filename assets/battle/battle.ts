@@ -7,6 +7,7 @@ import resourceManager from './ResourceManager';
 import { 牌, 牌状态 } from './牌';
 import { GAS } from './GAS/AbilitySystemComponent';
 import { create_unit, Unit } from './GAS/Unit';
+import { Player } from './Player';
 const { ccclass, property } = _decorator;
 
 class BattleInitData {
@@ -72,7 +73,7 @@ export class battle extends Component {
         const 牌数据Map = 静态配置.instance.牌数据Map;
         await resourceManager.loadAll<Prefab>(Array.from(牌数据Map.values()).map(card => card.prefab));
 
-        this.player = create_unit(Unit);
+        this.player = create_unit(Player);
         this.player.node.setParent(this.node);
 
         this.player.gas.属性Map.set("骰子最小数量", new Attr(静态配置.instance.骰子个数基础最小值, this.player.gas));

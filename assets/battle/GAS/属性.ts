@@ -2,79 +2,74 @@ import { assert } from "cc";
 import { GAS as GAS } from "./AbilitySystemComponent";
 
 
+export class AttrOperator {
+    value: Attr;
+    op: AttrOperatorType;
+
+    constructor(op: AttrOperatorType, value: Attr) {
+        this.value = value;
+        this.op = op;
+    }
+}
 
 
-export type 属性Modifier_op = "add" | "mul" | "min" | "max" | "set" | "mul_mul" | "add_add";
+export type AttrOperatorType = "add" | "mul" | "set" | "mul_mul" | "add_add";
 
-// type type属性构造函数 = new () => Attr;
-// type type属性创建Factory = {
-//     constructor_func: type属性构造函数;
-//     base_value: number;
-//     max_attr_name: string;
-//     min_attr_name: string;
-// }
+type type属性构造函数 = new (base_value: number, gas?: GAS) => Attr;
+type type属性创建Factory = {
+    constructor_func: type属性构造函数;
+    base_value: number;
+}
 
-// export class 属性静态注册器 {
-//     static 注册(name: string, 构造函数: type属性构造函数, base_value: number = 0, max_attr_name: string = undefined, min_attr_name: string = undefined) {
-//         if(属性静态注册器.属性构造Map.has(name)) {
-//             throw new Error(`属性 ${name} 已存在`);
-//         }
-//         属性静态注册器.属性构造Map.set(name, {constructor_func: 构造函数, base_value: base_value, max_attr_name: max_attr_name, min_attr_name: min_attr_name});
-//     }
+export class 属性静态注册器 {
+    static 注册(name: string, base_value: number = 0, 构造函数: type属性构造函数 = undefined) {
+        if(属性静态注册器.属性构造Map.has(name)) {
+            throw new Error(`属性 ${name} 已存在`);
+        }
+        属性静态注册器.属性构造Map.set(name, {constructor_func: 构造函数?? Attr, base_value: base_value});
+    }
 
-//     static 获取(name: string): type属性创建Factory {
-//         if(属性静态注册器.属性构造Map.has(name)) {
-//             return 属性静态注册器.属性构造Map.get(name);
-//         }
-//         throw new Error(`属性 ${name} 不存在`);
-//     }
+    static 获取(name: string): type属性创建Factory {
+        if(属性静态注册器.属性构造Map.has(name)) {
+            return 属性静态注册器.属性构造Map.get(name);
+        }
+        throw new Error(`属性 ${name} 不存在`);
+    }
 
-//     static 创建(name: string, 管理器: GAS_AbilitySystem, base_value: number = undefined): Attr {
-//         const 工厂 = 属性静态注册器.获取(name);
-//         if(工厂 === undefined) {
-//             throw new Error(`属性 ${name} 不存在`);
-//         }
+    static 创建(name: string, 管理器: GAS, base_value: number = undefined): Attr {
+        let 工厂 = 属性静态注册器.获取(name);
+        if(工厂 === undefined) {
+            工厂 = {
+                constructor_func: Attr,
+                base_value: 0
+            };
+        }
 
-//         if(base_value === undefined) {
-//             base_value = 工厂.base_value;
-//             if(base_value === undefined) {
-//                 base_value = 0;
-//             }
-//         }
+        if(base_value === undefined) {
+            base_value = 工厂.base_value;
+            if(base_value === undefined) {
+                base_value = 0;
+            }
+        }
 
-//         const attr = new 工厂.constructor_func();
-//         if(!管理器) {
-//             attr._GAS = 管理器;
-//         }
-//         attr.base_value = base_value;
-//         if(工厂.max_attr_name){
-//             const max_attr = 管理器.get_attr(工厂.max_attr_name, false);
-//             assert(max_attr !== undefined, `属性 ${工厂.max_attr_name} 不存在`);
-//             attr.add_modifier(max_attr);
-//         }
-//         if(工厂.min_attr_name){
-//             const min_attr = 管理器.get_attr(工厂.min_attr_name, false);
-//             assert(min_attr !== undefined, `属性 ${工厂.min_attr_name} 不存在`);
-//             attr.add_modifier(min_attr);
-//         }
-//         return attr;
-//     }
+        const attr = new 工厂.constructor_func(base_value, 管理器);
+        return attr;
+    }
 
-//     static 属性构造Map: Map<string, type属性创建Factory> = new Map();
-// }
+    static 属性构造Map: Map<string, type属性创建Factory> = new Map();
+}
 
 export class Attr {
     gas: GAS;
     _dirty_publisher_array?: Attr[];
     _dirty_subscriber_array?: Attr[];
-    protected _modifier_list?: Attr[];
-    _modifiler_op: 属性Modifier_op;
+    protected _attr_operator_list?: AttrOperator[];
 
     _dirty: boolean = true;
     _base_value: number;
     _final_value: number;
-    _min_value: number;
-    _max_value: number;
+    _min_attr: Attr;
+    _max_attr: Attr;
 
     constructor(base_value: number, gas?: GAS) {
         this._base_value = base_value;
@@ -190,22 +185,18 @@ export class Attr {
         let mul = 1;
         let mul_mul = 1;
         
-        if(this._modifier_list !== undefined) {
-            for(let modifier of this._modifier_list) {
-                if(modifier.modifier_op === "add") {
-                    ret += modifier.value;
-                }else if(modifier.modifier_op === "mul") {
-                    mul += modifier.value;
-                }else if(modifier.modifier_op === "min") {
-                    this._min_value = modifier.value;
-                }else if(modifier.modifier_op === "max") {
-                    this._max_value = modifier.value;
-                }else if(modifier.modifier_op === "set") {
-                    this._base_value = modifier.value;
-                }else if(modifier.modifier_op === "mul_mul") {
-                    mul_mul *= modifier.value;
+        if(this._attr_operator_list !== undefined) {
+            for(let attr_operator of this._attr_operator_list) {
+                if(attr_operator.op === "add") {
+                    ret += attr_operator.value.value;
+                }else if(attr_operator.op === "mul") {
+                    mul += attr_operator.value.value;
+                }else if(attr_operator.op === "set") {
+                    this._base_value = attr_operator.value.value;
+                }else if(attr_operator.op === "mul_mul") {
+                    mul_mul *= attr_operator.value.value;
                 }else{
-                    assert(false, "属性Modifier_op 未实现");
+                    assert(false, `AttrOperatorType ${attr_operator.op} 未实现`);
                 }
             }
         }
@@ -216,12 +207,12 @@ export class Attr {
     do_refresh_value() {
         this._final_value = this.calc_self();
 
-        if(this._min_value !== undefined) {
-            this._final_value = Math.max(this._final_value, this._min_value);
+        if(this._min_attr !== undefined) {
+            this._final_value = Math.max(this._final_value, this._min_attr.value);
         }
 
-        if(this._max_value !== undefined) {
-            this._final_value = Math.min(this._final_value, this._max_value);
+        if(this._max_attr !== undefined) {
+            this._final_value = Math.min(this._final_value, this._max_attr.value);
         }
 
         this._dirty = false;
@@ -241,36 +232,49 @@ export class Attr {
     }
 
     get min_value(): number {
-        return this._min_value?? -Infinity;
+        return this._min_attr?.value?? -Infinity;
     }
-    set min_value(v: number) {
-        this._min_value = v;
+    set min_value(attr: Attr) {
+        if(this._min_attr) {
+            this.unsubscribe_dirty_change(this._min_attr);
+        }
+        this._min_attr = attr;
+        if(attr) {
+            this.subscribe_dirty_change(attr);
+        }
         this.to_dirty(true);
     }
 
     get max_value(): number {
-        return this._max_value?? Infinity;
+        return this._max_attr?.value?? Infinity;
     }
-    set max_value(v: number) {
-        this._max_value = v;
-        this.to_dirty(true);
-    }
-
-    add_modifier(modifier: Attr): void {
-        if(this._modifier_list === undefined) {
-            this._modifier_list = [];
+    set max_value(attr: Attr) {
+        if(this._max_attr) {
+            this.unsubscribe_dirty_change(this._max_attr);
         }
-        this._modifier_list.push(modifier);
-        this.subscribe_dirty_change(modifier);
+        this._max_attr = attr;
+        if(attr) {
+            this.subscribe_dirty_change(attr);
+        }
         this.to_dirty(true);
     }
 
-    remove_modifier(modifier: Attr): void {
-        if(this._modifier_list === undefined) {
+    add_attr_operator(attr_operator: AttrOperator): void {
+        if(this._attr_operator_list === undefined) {
+            this._attr_operator_list = [];
+        }
+        this._attr_operator_list.push(attr_operator);
+        this.subscribe_dirty_change(attr_operator.value);
+        this.to_dirty(true);
+    }
+
+    remove_attr_operator(attr_operator: AttrOperator): void {
+        if(this._attr_operator_list === undefined) {
+            assert(false, "remove_attr_operator: 当前对象没有属性操作符列表");
             return;
         }
-        this._modifier_list = this._modifier_list.filter(elem => elem !== modifier);
-        this.unsubscribe_dirty_change(modifier);
+        this._attr_operator_list = this._attr_operator_list.filter(elem => elem !== attr_operator);
+        this.unsubscribe_dirty_change(attr_operator.value);
         this.to_dirty(true);
     }
 
@@ -286,15 +290,6 @@ export class Attr {
             }
         }
     }
-
-    get source(): any {
-        return undefined;
-    }
-
-    get modifier_op(): 属性Modifier_op {
-        return this._modifiler_op?? "add";
-    }
 }
-
 
 
