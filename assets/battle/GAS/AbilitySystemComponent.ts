@@ -1,7 +1,6 @@
 import { _decorator, Component, Node } from 'cc';
 import { GAS_Effect } from './Effect';
 import { Attr } from './属性';
-import { 属性静态注册器 } from './属性';
 const { ccclass, property } = _decorator;
 
 export interface ITagName {
@@ -84,27 +83,61 @@ export class TagManager {
     }
 }
 
-export interface ITarContainer {
+export interface ITagContainer {
     tags: ITagName[];
 }
 
-@ccclass('GAS_AbilitySystem')
-export class GAS_AbilitySystem extends Component implements ITarContainer {
+export interface IGASComponentInitable {
+    _GAS_init_flag: boolean;
+    GAS_component_init();  // 防止OnLoad调用前出问题
+}
+
+export class GAS_BaseComponent extends Component implements IGASComponentInitable {
+    _GAS_init_flag: boolean = false;
+
+    OnLoad() {
+        this.GAS_component_init();
+    }
+
+    GAS_component_init() {
+        if(this._GAS_init_flag) {
+            return;
+        }
+    }
+}
+
+@ccclass('GAS')
+export class GAS extends Component implements ITagContainer, IGASComponentInitable {
+    _GAS_init_flag: boolean = false;
     tags: ITagName[] = [];
 
     effects: GAS_Effect[] = [];
     
     属性Map: Map<string, Attr> = new Map();
 
-    get_attr(name: string, create_if_not_exist: boolean = false): Attr {
-        let attr = this.属性Map.get(name);
-        if(attr == undefined) {
-            if(create_if_not_exist){
-                attr = 属性静态注册器.创建(name, this);
-                this.属性Map.set(name, attr);
-            }
-        }
+    // get_attr(name: string, create_if_not_exist: boolean = false): Attr {
+    //     let attr = this.属性Map.get(name);
+    //     if(attr == undefined) {
+    //         if(create_if_not_exist){
+    //             attr = 属性静态注册器.创建(name, this);
+    //             this.属性Map.set(name, attr);
+    //         }
+    //     }
         
-        return attr;
+    //     return attr;
+    // }
+
+    
+
+    GAS_component_init() {
+        if(this._GAS_init_flag) {
+            return;
+        }
+
+        this._GAS_init_flag = true;
     }
+}
+
+export function CallGASComponentInit(node: Node) {
+    for(let component of node.getComponents())
 }

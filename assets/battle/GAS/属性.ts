@@ -1,70 +1,70 @@
 import { assert } from "cc";
-import { GAS_AbilitySystem as GAS_AbilitySystem } from "./AbilitySystemComponent";
+import { GAS as GAS } from "./AbilitySystemComponent";
 
 
 
 
-type 属性Modifier_op = "add" | "mul" | "min" | "max" | "set" | "mul_mul" | "add_add";
+export type 属性Modifier_op = "add" | "mul" | "min" | "max" | "set" | "mul_mul" | "add_add";
 
-type type属性构造函数 = new () => Attr;
-type type属性创建Factory = {
-    constructor_func: type属性构造函数;
-    base_value: number;
-    max_attr_name: string;
-    min_attr_name: string;
-}
+// type type属性构造函数 = new () => Attr;
+// type type属性创建Factory = {
+//     constructor_func: type属性构造函数;
+//     base_value: number;
+//     max_attr_name: string;
+//     min_attr_name: string;
+// }
 
-export class 属性静态注册器 {
-    static 注册(name: string, 构造函数: type属性构造函数, base_value: number = 0, max_attr_name: string = undefined, min_attr_name: string = undefined) {
-        if(属性静态注册器.属性构造Map.has(name)) {
-            throw new Error(`属性 ${name} 已存在`);
-        }
-        属性静态注册器.属性构造Map.set(name, {constructor_func: 构造函数, base_value: base_value, max_attr_name: max_attr_name, min_attr_name: min_attr_name});
-    }
+// export class 属性静态注册器 {
+//     static 注册(name: string, 构造函数: type属性构造函数, base_value: number = 0, max_attr_name: string = undefined, min_attr_name: string = undefined) {
+//         if(属性静态注册器.属性构造Map.has(name)) {
+//             throw new Error(`属性 ${name} 已存在`);
+//         }
+//         属性静态注册器.属性构造Map.set(name, {constructor_func: 构造函数, base_value: base_value, max_attr_name: max_attr_name, min_attr_name: min_attr_name});
+//     }
 
-    static 获取(name: string): type属性创建Factory {
-        if(属性静态注册器.属性构造Map.has(name)) {
-            return 属性静态注册器.属性构造Map.get(name);
-        }
-        throw new Error(`属性 ${name} 不存在`);
-    }
+//     static 获取(name: string): type属性创建Factory {
+//         if(属性静态注册器.属性构造Map.has(name)) {
+//             return 属性静态注册器.属性构造Map.get(name);
+//         }
+//         throw new Error(`属性 ${name} 不存在`);
+//     }
 
-    static 创建(name: string, 管理器: GAS_AbilitySystem, base_value: number = undefined): Attr {
-        const 工厂 = 属性静态注册器.获取(name);
-        if(工厂 === undefined) {
-            throw new Error(`属性 ${name} 不存在`);
-        }
+//     static 创建(name: string, 管理器: GAS_AbilitySystem, base_value: number = undefined): Attr {
+//         const 工厂 = 属性静态注册器.获取(name);
+//         if(工厂 === undefined) {
+//             throw new Error(`属性 ${name} 不存在`);
+//         }
 
-        if(base_value === undefined) {
-            base_value = 工厂.base_value;
-            if(base_value === undefined) {
-                base_value = 0;
-            }
-        }
+//         if(base_value === undefined) {
+//             base_value = 工厂.base_value;
+//             if(base_value === undefined) {
+//                 base_value = 0;
+//             }
+//         }
 
-        const attr = new 工厂.constructor_func();
-        if(!管理器) {
-            attr._GAS = 管理器;
-        }
-        attr.base_value = base_value;
-        if(工厂.max_attr_name){
-            const max_attr = 管理器.get_attr(工厂.max_attr_name, false);
-            assert(max_attr !== undefined, `属性 ${工厂.max_attr_name} 不存在`);
-            attr.add_modifier(max_attr);
-        }
-        if(工厂.min_attr_name){
-            const min_attr = 管理器.get_attr(工厂.min_attr_name, false);
-            assert(min_attr !== undefined, `属性 ${工厂.min_attr_name} 不存在`);
-            attr.add_modifier(min_attr);
-        }
-        return attr;
-    }
+//         const attr = new 工厂.constructor_func();
+//         if(!管理器) {
+//             attr._GAS = 管理器;
+//         }
+//         attr.base_value = base_value;
+//         if(工厂.max_attr_name){
+//             const max_attr = 管理器.get_attr(工厂.max_attr_name, false);
+//             assert(max_attr !== undefined, `属性 ${工厂.max_attr_name} 不存在`);
+//             attr.add_modifier(max_attr);
+//         }
+//         if(工厂.min_attr_name){
+//             const min_attr = 管理器.get_attr(工厂.min_attr_name, false);
+//             assert(min_attr !== undefined, `属性 ${工厂.min_attr_name} 不存在`);
+//             attr.add_modifier(min_attr);
+//         }
+//         return attr;
+//     }
 
-    static 属性构造Map: Map<string, type属性创建Factory> = new Map();
-}
+//     static 属性构造Map: Map<string, type属性创建Factory> = new Map();
+// }
 
 export class Attr {
-    _GAS: GAS_AbilitySystem;
+    gas: GAS;
     _dirty_publisher_array?: Attr[];
     _dirty_subscriber_array?: Attr[];
     protected _modifier_list?: Attr[];
@@ -228,8 +228,8 @@ export class Attr {
         this.to_dirty(true);
     }
 
-    get GAS(): GAS_AbilitySystem {
-        return this._GAS;
+    get GAS(): GAS {
+        return this.gas;
     }
 
     get min_value(): number {

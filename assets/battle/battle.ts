@@ -5,7 +5,7 @@ import { 静态配置 } from '../静态配置';
 import { 属性 } from './GAS/属性';
 import resourceManager from './ResourceManager';
 import { 牌, 牌状态 } from './牌';
-import { GAS_AbilitySystem } from './GAS/AbilitySystemComponent';
+import { GAS } from './GAS/AbilitySystemComponent';
 const { ccclass, property } = _decorator;
 
 class BattleInitData {
