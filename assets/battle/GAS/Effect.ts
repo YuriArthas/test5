@@ -1,6 +1,5 @@
 import { _decorator, assert, Component } from "cc";
-import { GAS, ITagName } from "./AbilitySystemComponent";
-import { GAS_BaseComponent } from "./AbilitySystemComponent";
+import { ASC, ITagName } from "./AbilitySystemComponent";
 import { Attr, AttrOperator, AttrOperatorType, 属性静态注册器 } from "./属性";
 const { ccclass, property } = _decorator;
 
@@ -10,13 +9,13 @@ export enum TagListEnum {
 }
 
 export class AttrModifier {
-    aim_name: string;
-    attr_operator: AttrOperator;
-    test_func: (gas: GAS) => boolean;
+    aim_name: string = undefined;
+    attr_operator: AttrOperator = undefined;
+    test_func: (gas: ASC) => boolean = undefined;
 
     private _attached_attr: Attr;
 
-    constructor(aim_name: string, op: AttrOperatorType, value: Attr, test_func?: (gas: GAS) => boolean) {
+    constructor(aim_name: string, op: AttrOperatorType, value: Attr, test_func?: (gas: ASC) => boolean) {
         this.aim_name = aim_name;
         this.attr_operator = new AttrOperator(op, value);
         if(test_func) {
@@ -49,59 +48,63 @@ export class AttrModifier {
 export type EffectDurationType = "immediately" | "duration" | "manual" | "infinite";
 export const EmptyTagList: Readonly<ITagName[]> = [];
 
-export class GAS_Effect {
-    durationType: EffectDurationType;
-    duration: number;
-    
-    gas: GAS;  // Effect总归会绑定一个GAS
+export class Effect {
+    durationType: EffectDurationType = undefined;
+    duration: number = undefined;
 
-    modifier_list: AttrModifier[];
+    readonly _effect_tags: Readonly<ITagName[]> = undefined;
+    
+    asc: ASC = undefined;  // Effect总归会绑定一个GAS
+
+    modifier_list: AttrModifier[] = undefined;
     // tag_modifier_list: TagModifier[];  // 总是更改自身的GAS的tag
 
-    constructor(gas: GAS, durationType: EffectDurationType, duration: number, modifier_list?: AttrModifier[]) {
-        this.gas = gas;
+    constructor(asc: ASC, effect_tags: Readonly<ITagName[]>, durationType: EffectDurationType, duration: number, modifier_list?: AttrModifier[]) {
+        this.asc = asc;
         this.durationType = durationType;
         this.duration = duration;
-        if(modifier_list) {
-            this.modifier_list = modifier_list;
-        }
+        this._effect_tags = effect_tags;
+        
+        this.modifier_list = modifier_list;
+        
     }
 
     // 当前effect的tag
-    get effectTags(): Readonly<ITagName[]> {
-        throw new Error("effectTags: 子类必须实现");
+    effectTags(): Readonly<ITagName[]> {
+        return this._effect_tags;
     }
 
     // 如果目标身上没有这些 Tag，GE 将不会应用
-    get requiredTags(): Readonly<ITagName[]> {
-        return EmptyTagList;
+    attach_required_tags(): Readonly<ITagName[]> {
+        return undefined;
     }
 
     // 应用当前 GE 时，自动添加这些 Tag
-    get grantTags(): Readonly<ITagName[]> {
-        return EmptyTagList;
+    grant_tags(): Readonly<ITagName[]> {
+        return undefined;
     }
 
     // 如果目标拥有这些 Tag，GE 将不会应用
-    get blockedTags(): Readonly<ITagName[]> {
-        return EmptyTagList;
+    block_me_attach_tags(): Readonly<ITagName[]> {
+        return undefined;
     }
 
-    // 应用当前 GE 时，自动移除目标身上具有这些 Tag 的 GE
-    get removeEffectTags(): Readonly<ITagName[]> {
-        return EmptyTagList;
+    // 应用当前 GE 时，自动移除目标身上具有这些 Tag 的 GE/Ability
+    cancel_other_tags(): Readonly<ITagName[]> {
+        return undefined;
     }
 
     // 使目标免疫具有这些 Tag 的 GE 应用
-    get GrantImmunityTags(): Readonly<ITagName[]> {
-        return EmptyTagList;
+    block_other_tags(): Readonly<ITagName[]> {
+        return undefined;
     }
 
     TestAttach(): boolean {
-        if(this.requiredTags.length > 0) {
-            for(let tag of this.requiredTags) {
+        const required_tags = this.attach_required_tags();
+        if(required_tags) {
+            for(let tag of required_tags) {
                 let found = false;
-                for(let [key] of this.gas.owned_tags) {
+                for(let [key] of this.asc.owned_tags) {
                     if(key.contains(tag)) {
                         found = true;
                         break;
@@ -113,10 +116,11 @@ export class GAS_Effect {
             }
         }
 
-        if(this.blockedTags.length > 0) {
-            for(let tag of this.blockedTags) {
+        const blocked_tags = this.block_me_attach_tags();
+        if(blocked_tags) {
+            for(let tag of blocked_tags) {
                 let found = false;
-                for(let [key] of this.gas.owned_tags) {
+                for(let [key] of this.asc.owned_tags) {
                     if(key.contains(tag)) {
                         found = true;
                         break;
@@ -130,13 +134,13 @@ export class GAS_Effect {
 
         if(this.modifier_list) {
             for(let modifier of this.modifier_list) {
-                let attr = this.gas.属性Map.get(modifier.aim_name);
+                let attr = this.asc.属性Map.get(modifier.aim_name);
                 if(!attr) {
-                    attr = 属性静态注册器.创建(modifier.aim_name, this.gas);
+                    attr = 属性静态注册器.创建(modifier.aim_name, this.asc);
                 }
 
                 if(modifier.test_func){
-                    if(!modifier.test_func(this.gas)) {
+                    if(!modifier.test_func(this.asc)) {
                         return false;
                     }
                 }
@@ -148,45 +152,36 @@ export class GAS_Effect {
 
     attach(): void {
         if(this.durationType != "immediately") {
-            this.gas.effects.push(this);
+            this.asc.effects.push(this);
         }
 
         for(let modifier of this.modifier_list) {
-            modifier.attached_attr = this.gas.属性Map.get(modifier.aim_name);
+            modifier.attached_attr = this.asc.属性Map.get(modifier.aim_name);
             assert(modifier.attached_attr !== undefined, `attach: 属性 ${modifier.aim_name} 不存在`);
             modifier.attached_attr.add_attr_operator(modifier.attr_operator);
         }
 
-        for(let tag of this.grantTags) {
-            let count = this.gas.owned_tags.get(tag);
-            if(count !== undefined) {
-                this.gas.owned_tags.set(tag, count + 1);
-            } else {
-                this.gas.owned_tags.set(tag, 1);
+        const grant_tags = this.grant_tags();
+        if(grant_tags) {
+            for(let tag of grant_tags) {
+                let count = this.asc.owned_tags.get(tag);
+                if(count !== undefined) {
+                    this.asc.owned_tags.set(tag, count + 1);
+                } else {
+                    this.asc.owned_tags.set(tag, 1);
+                }
             }
         }
 
-        const to_remove_effects: GAS_Effect[] = [];
-        for(let tag of this.removeEffectTags) {
-            this.gas.effects = this.gas.effects.filter(elem => {
-                for(let key of elem.effectTags) {
-                    if(key.contains(tag)) {
-                        to_remove_effects.push(elem);
-                        return false;
-                    }
-                }
-                return true;
-            });
-        }
-
-        for(let elem of to_remove_effects) {
-            elem.detach();
+        const cancel_other_tags = this.cancel_other_tags();
+        if(cancel_other_tags) {
+            this.asc.cancel_by_tags(cancel_other_tags);
         }
     }
 
     detach(): void {
         assert(this.durationType != "immediately", "detach: 立即生效的Effect不能被detach");
-        this.gas.effects = this.gas.effects.filter(elem => elem !== this);
+        this.asc.effects = this.asc.effects.filter(elem => elem !== this);
         for(let modifier of this.modifier_list) {
             modifier.attached_attr.remove_attr_operator(modifier.attr_operator);
         }

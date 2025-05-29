@@ -1,5 +1,5 @@
 import { assert } from "cc";
-import { GAS as GAS } from "./AbilitySystemComponent";
+import { ASC as ASC } from "./AbilitySystemComponent";
 
 
 export class AttrOperator {
@@ -15,7 +15,7 @@ export class AttrOperator {
 
 export type AttrOperatorType = "add" | "mul" | "set" | "mul_mul" | "add_add";
 
-type type属性构造函数 = new (base_value: number, gas?: GAS) => Attr;
+type type属性构造函数 = new (base_value: number, asc?: ASC) => Attr;
 type type属性创建Factory = {
     constructor_func: type属性构造函数;
     base_value: number;
@@ -36,7 +36,7 @@ export class 属性静态注册器 {
         throw new Error(`属性 ${name} 不存在`);
     }
 
-    static 创建(name: string, 管理器: GAS, base_value: number = undefined): Attr {
+    static 创建(name: string, 管理器: ASC, base_value: number = undefined): Attr {
         let 工厂 = 属性静态注册器.获取(name);
         if(工厂 === undefined) {
             工厂 = {
@@ -60,7 +60,7 @@ export class 属性静态注册器 {
 }
 
 export class Attr {
-    gas: GAS;
+    asc: ASC;
     _dirty_publisher_array?: Attr[];
     _dirty_subscriber_array?: Attr[];
     protected _attr_operator_list?: AttrOperator[];
@@ -71,10 +71,10 @@ export class Attr {
     _min_attr: Attr;
     _max_attr: Attr;
 
-    constructor(base_value: number, gas?: GAS) {
+    constructor(base_value: number, asc?: ASC) {
         this._base_value = base_value;
-        if(gas) {
-            this.gas = gas;
+        if(asc) {
+            this.asc = asc;
         }
     }
 
@@ -227,8 +227,8 @@ export class Attr {
         this.to_dirty(true);
     }
 
-    get GAS(): GAS {
-        return this.gas;
+    get ASC(): ASC {
+        return this.asc;
     }
 
     get min_value(): number {

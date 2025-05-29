@@ -5,7 +5,7 @@ import { 静态配置 } from '../静态配置';
 import { Attr } from './GAS/属性';
 import resourceManager from './ResourceManager';
 import { 牌, 牌状态 } from './牌';
-import { GAS } from './GAS/AbilitySystemComponent';
+import { ASC } from './GAS/AbilitySystemComponent';
 import { create_unit, Unit } from './GAS/Unit';
 import { Player } from './Player';
 const { ccclass, property } = _decorator;
@@ -76,8 +76,8 @@ export class battle extends Component {
         this.player = create_unit(Player);
         this.player.node.setParent(this.node);
 
-        this.player.gas.属性Map.set("骰子最小数量", new Attr(静态配置.instance.骰子个数基础最小值, this.player.gas));
-        this.player.gas.属性Map.set("骰子最大数量", new Attr(静态配置.instance.骰子个数基础最大值, this.player.gas));
+        this.player.asc.属性Map.set("骰子最小数量", new Attr(静态配置.instance.骰子个数基础最小值, this.player.asc));
+        this.player.asc.属性Map.set("骰子最大数量", new Attr(静态配置.instance.骰子个数基础最大值, this.player.asc));
 
         console.log("loadAll finished");
     }
@@ -124,7 +124,7 @@ export class battle extends Component {
         // 简单的清理方式：清理所有以当前组件为target的"牌被点击"事件
         this.node.targetOff(this);
 
-        const count = this.random_int(this.player.gas.属性Map.get("骰子最小数量").value, this.player.gas.属性Map.get("骰子最大数量").value + 1);
+        const count = this.random_int(this.player.asc.属性Map.get("骰子最小数量").value, this.player.asc.属性Map.get("骰子最大数量").value + 1);
         
         this.do_random_card(count);
     }

@@ -1,5 +1,5 @@
 import { _decorator, Component, Node } from 'cc';
-import { GAS_Effect } from './Effect';
+import { Effect } from './Effect';
 import { Attr } from './属性';
 import { Unit } from './Unit';
 const { ccclass, property } = _decorator;
@@ -94,15 +94,20 @@ export class GAS_BaseComponent extends Component {
     
 }
 
-@ccclass('GAS')
-export class GAS extends GAS_BaseComponent implements ITagContainer {
+@ccclass('ASC')
+export class ASC extends GAS_BaseComponent implements ITagContainer {
     unit: Unit;
     owned_tags: Map<ITagName, number> = new Map();
     blocked_ability_tags: Map<ITagName, number> = new Map();
     blocked_effect_tags: Map<ITagName, number> = new Map();
     
-    effects: GAS_Effect[] = [];
+    effects: Effect[] = [];
     
     属性Map: Map<string, Attr> = new Map();
 
+    cancel_by_tags(tags: Readonly<ITagName[]>): void {
+        for(let tag of tags) {
+            
+        }
+    }
 }
