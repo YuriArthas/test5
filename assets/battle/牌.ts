@@ -1,5 +1,8 @@
 import { _decorator, Component, Node, Button } from 'cc';
 import { 牌数据 } from './牌数据';
+import { Pawn } from './GAS/Pawn';
+import { Player } from './GAS/Player';
+import { World } from './GAS/World';
 const { ccclass, property } = _decorator;
 
 export enum 牌状态 {
@@ -21,7 +24,7 @@ export interface I牌数据 {
     name: string;
     合成材料: I牌数据[];
     prefab?: string;
-    component?: new () => 牌;
+    牌class?: new () => 牌;
 
     aim: 牌目标;
 
@@ -30,20 +33,14 @@ export interface I牌数据 {
         max: number;
     }
 
-    create_card(): Node;
+    create_card(world: World, player: Player): 牌;
 }
 
 @ccclass('牌')
-export class 牌 extends Component {
+export class 牌 extends Pawn {
     public 牌状态: 牌状态 = 牌状态.None;
 
-    public 牌数据: I牌数据 = null;
-
-    start() {
-        
-    }
-
-    
+    public 牌数据: I牌数据 = undefined;
 
     /**
      * 销毁时清理

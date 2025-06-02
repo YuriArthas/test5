@@ -139,7 +139,7 @@ export class 静态配置 {
         card.name = config.name;
         card.合成材料 = [];
         card.prefab = config.面prefab?? 静态配置.通用牌prefab_path;
-        card.component = config.component?? 牌;
+        card.牌class = config.component?? 牌;
         card.num = config.num;
         card.aim = config.aim?? 牌目标.敌方1;
         // 先将牌添加到Map中，以便后续引用

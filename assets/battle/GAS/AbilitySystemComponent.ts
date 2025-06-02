@@ -1,7 +1,9 @@
 import { _decorator, Component, Node } from 'cc';
-import { GAS_Effect } from './Effect';
-import { Attr } from './属性';
+import { Effect } from './Effect';
+import { Attr, BaseAttr } from './属性';
 import { Unit } from './Unit';
+import { AbilitySpec } from './AbilitySpec';
+import { AbilityInstance } from './AbilityInstance';
 const { ccclass, property } = _decorator;
 
 export interface ITagName {
@@ -11,6 +13,8 @@ export interface ITagName {
     // equals(other: ITagname): boolean;
 
     contains(other: ITagName): boolean;
+
+    toString(): string;
 }
 
 export function ToTagName(name: string): ITagName {
@@ -37,6 +41,10 @@ class TagName implements ITagName {
             return true;
         }
         return false;
+    }
+
+    toString(): string {
+        return this.name;
     }
 }
 
@@ -84,25 +92,22 @@ export class TagManager {
     }
 }
 
-export interface ITagContainer {
-    owned_tags: Map<ITagName, number>;
-    blocked_ability_tags: Map<ITagName, number>;
-    blocked_effect_tags: Map<ITagName, number>;
-}
-
 export class GAS_BaseComponent extends Component {
     
 }
 
-@ccclass('GAS')
-export class GAS extends GAS_BaseComponent implements ITagContainer {
-    unit: Unit;
+@ccclass('ASC')
+export class ASC extends GAS_BaseComponent{
+    unit: Unit; // 每个ASC都必然有一个Unit
     owned_tags: Map<ITagName, number> = new Map();
-    blocked_ability_tags: Map<ITagName, number> = new Map();
-    blocked_effect_tags: Map<ITagName, number> = new Map();
-    
-    effects: GAS_Effect[] = [];
-    
-    属性Map: Map<string, Attr> = new Map();
+    blocked_other_tags: Map<ITagName, number> = new Map();
 
+    ability_spec_list: AbilitySpec[] = [];
+
+    tag_ability_map: Map<ITagName, AbilityInstance[]> = new Map();
+    tag_effect_map: Map<ITagName, Effect[]> = new Map();
+
+    running_ability_instance_list: AbilityInstance[] = [];
+    
+    属性Map: Map<string, BaseAttr> = new Map();
 }

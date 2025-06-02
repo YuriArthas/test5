@@ -2,7 +2,10 @@ import { _decorator, Button, Component, Sprite, Prefab, instantiate, Node, Label
 import { 静态配置 } from "../静态配置";
 import resourceManager from "../battle/ResourceManager";
 import { 牌, I牌数据, 牌目标 } from "../battle/牌";
-import { AbilitySystemComponent } from "./GAS/AbilitySystemComponent";
+import { ASC } from "./GAS/AbilitySystemComponent";
+import { create_pawn } from "./GAS/Pawn";
+import { Player } from "./GAS/Player";
+import { World } from "./GAS/World";
 
 const { ccclass, property } = _decorator;
 
@@ -10,7 +13,7 @@ export class 牌数据 implements I牌数据 {
     name: string;
     合成材料: I牌数据[];
     prefab?: string;
-    component?: new () => 牌;
+    牌class?: new () => 牌;
 
     aim: 牌目标;
 
@@ -75,12 +78,12 @@ export class 牌数据 implements I牌数据 {
         return true;
     }
 
-    create_card(): Node {
+    create_card(world: World, player: Player): 牌 {
         let prefab_path = this.prefab;
         const prefab = resourceManager.get_assets<Prefab>(prefab_path);
-        const card = instantiate(prefab);
+        const cardNode = instantiate(prefab);
         if(prefab_path == 静态配置.通用牌prefab_path) {  // 通用牌
-            const LabelNode = card.getChildByName("Label");
+            const LabelNode = cardNode.getChildByName("Label");
             if(LabelNode){
                 const label = LabelNode.getComponent(Label);
                 if(label){
@@ -89,10 +92,8 @@ export class 牌数据 implements I牌数据 {
             }
         }
 
-        card.addComponent(AbilitySystemComponent);
-
-        const 牌组件 = card.addComponent(this.component);
-        牌组件.牌数据 = this;
+        const card = create_pawn(this.牌class, world, player, cardNode);
+        card.牌数据 = this;
         
         return card;
     }
