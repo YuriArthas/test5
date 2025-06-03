@@ -82,7 +82,7 @@ export class 牌数据 implements I牌数据 {
         let prefab_path = this.prefab;
         const prefab = resourceManager.get_assets<Prefab>(prefab_path);
         const cardNode = instantiate(prefab);
-        if(prefab_path == 静态配置.通用牌prefab_path) {  // 通用牌
+        if(prefab_path == 静态配置.instance.通用牌prefab_path) {  // 通用牌
             const LabelNode = cardNode.getChildByName("Label");
             if(LabelNode){
                 const label = LabelNode.getComponent(Label);

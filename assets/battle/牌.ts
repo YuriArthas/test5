@@ -3,6 +3,7 @@ import { 牌数据 } from './牌数据';
 import { Pawn } from './GAS/Pawn';
 import { Player } from './GAS/Player';
 import { World } from './GAS/World';
+import { 可拖动Component } from './可拖动Component';
 const { ccclass, property } = _decorator;
 
 export enum 牌状态 {
@@ -42,10 +43,19 @@ export class 牌 extends Pawn {
 
     public 牌数据: I牌数据 = undefined;
 
+    protected onLoad(): void {
+        const 可拖动 = this.node.addComponent(可拖动Component);
+        可拖动.world = this.world;
+        可拖动.layer = 1;
+    }
+
+    
     /**
      * 销毁时清理
      */
     protected onDestroy(): void {
         this.node.off(Button.EventType.CLICK);
     }
+
+
 } 

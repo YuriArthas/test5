@@ -10,6 +10,8 @@ import { create_unit, Unit } from './GAS/Unit';
 import { create_player, Player } from './GAS/Player';
 import { create_world, World } from './GAS/World';
 import { create_team, Team } from './GAS/Team';
+import { 可被拖到Component } from './可被拖到Component';
+import { DragEndBehavior, 可拖动Component } from './可拖动Component';
 const { ccclass, property } = _decorator;
 
 class BattleInitData {
@@ -68,12 +70,12 @@ export class battle extends Component {
     }
 
     initBattle(data: 局数据) {
-        this.局数据 = data;
+        this.world.局数据 = data;
     }
 
     protected async onLoad(): Promise<void> {
-        const 牌数据Map = 静态配置.instance.牌数据Map;
-        await resourceManager.loadAll<Prefab>(Array.from(牌数据Map.values()).map(card => card.prefab));
+        // const 牌数据Map = 静态配置.instance.牌数据Map;
+        // await resourceManager.loadAll<Prefab>(Array.from(牌数据Map.values()).map(card => card.prefab));
 
         this.world = create_world(BattleWorld);
         this.world.battle = this;
@@ -86,7 +88,7 @@ export class battle extends Component {
     }
     
     start() {
-        if (!this.局数据){
+        if (!this.world.局数据){
             this.initBattle(this.生成局数据());
         }
 
@@ -103,6 +105,24 @@ export class battle extends Component {
         this.战斗开始按钮.on(Button.EventType.CLICK, this.on_战斗开始按钮_click, this);
 
         this.合成按钮.getComponent(Button).interactable = false;
+
+        for(let i = 0; i < 3; i++){
+            const 合成槽位 = resourceManager.get_assets<Prefab>(静态配置.instance.合成槽位prefab_path);
+
+            const 合成槽位实例 = instantiate(合成槽位);
+            const 可被拖到 = 合成槽位实例.addComponent(可被拖到Component);
+            可被拖到.world = this.world;
+            可被拖到.setLayer(1);
+            可被拖到.onDragDrop = (draggable: 可拖动Component): void => {
+                const card = draggable.node.getComponent(牌);
+                if(!card){
+                    assert(false, "合成槽位中不应该有非牌的节点");
+                }
+
+                draggable.dragEndBehavior = DragEndBehavior.STAY_AT_DROP_POSITION;
+            }
+            this.合成物品栏.addChild(合成槽位实例);
+        }
     }
 
     do_random_card(count: number){
@@ -111,11 +131,12 @@ export class battle extends Component {
         for(let i = 0; i < count; i++){
             const 随机索引 = this.random_int(0, 所有牌数据.length);
             const 随机牌数据 = 所有牌数据[随机索引];
-            const card = 随机牌数据.create_card(this.world, this.player_0);
+            const card = 随机牌数据.create_card(this.world, this.world.player_0);
             this.牌物品栏.addChild(card.node);
             card.牌状态 = 牌状态.在牌物品栏;
             
-            card.node.on(Button.EventType.CLICK, () => {this.on_牌_click(card)}, this);
+            
+            // card.node.on(Button.EventType.CLICK, () => {this.on_牌_click(card)}, this);
             if(i == 0){
 
                 card.node.setPosition(100, 0, 0);
@@ -131,7 +152,7 @@ export class battle extends Component {
         // 简单的清理方式：清理所有以当前组件为target的"牌被点击"事件
         this.node.targetOff(this);
 
-        const count = this.random_int(this.player_0.asc.属性Map.get("骰子最小数量").value(), this.player_0.asc.属性Map.get("骰子最大数量").value() + 1);
+        const count = this.random_int(this.world.player_0.asc.属性Map.get("骰子最小数量").value(), this.world.player_0.asc.属性Map.get("骰子最大数量").value() + 1);
         
         this.do_random_card(count);
     }
@@ -144,7 +165,7 @@ export class battle extends Component {
 
         const 合成结果 = 牌数据.尝试合成(this.合成物品栏.children.map(child => child.getComponent(牌).牌数据));
         if(合成结果){
-            const 合成结果牌 = 合成结果.create_card(this.world, this.player_0);
+            const 合成结果牌 = 合成结果.create_card(this.world, this.world.player_0);
             合成结果牌.getComponent(牌).牌状态 = 牌状态.在合成结果显示面板;
             合成结果牌.name = "合成结果";
             合成结果牌.node.setParent(this.合成结果显示面板);
@@ -237,7 +258,7 @@ class BattleWorld extends World {
 
     public player_1: Player = undefined;
 
-    private 局数据: 局数据 = undefined;
+    public 局数据: 局数据 = undefined;
 
     public 牌数据Map: Map<string, 牌数据> = new Map();
 

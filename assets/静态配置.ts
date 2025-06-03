@@ -102,8 +102,8 @@ export class 静态配置 {
     牌数据Map: Map<string, 牌数据> = new Map();
     骰子个数基础最小值: number = 4;
     骰子个数基础最大值: number = 8;
-    static 通用牌prefab_path: string = '6ca0aa92-bd00-4939-b276-3acbd1bc7513';
-
+    通用牌prefab_path: string = '6ca0aa92-bd00-4939-b276-3acbd1bc7513';
+    合成槽位prefab_path: string = 'b0d4e98f-c7b3-4c82-aeda-6ca24dbdb4e5';
     private static _instance: 静态配置;
     public static get instance(): 静态配置 {
         if (!this._instance) {
@@ -138,7 +138,7 @@ export class 静态配置 {
         const card = new 牌数据();
         card.name = config.name;
         card.合成材料 = [];
-        card.prefab = config.面prefab?? 静态配置.通用牌prefab_path;
+        card.prefab = config.面prefab?? this.通用牌prefab_path;
         card.牌class = config.component?? 牌;
         card.num = config.num;
         card.aim = config.aim?? 牌目标.敌方1;
