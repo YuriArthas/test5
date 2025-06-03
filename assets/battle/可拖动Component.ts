@@ -246,8 +246,10 @@ export class 可拖动Component extends Component {
                 break;
                 
             case DragEndBehavior.RETURN_TO_ORIGINAL:
-                // 返回到拖拽开始的位置
-                this.node.setPosition(this.nodeStartPos);
+                // 返回到拖拽开始的位置（仅在回退信息未被清除时）
+                if (this.nodeStartPos) {
+                    this.node.setPosition(this.nodeStartPos);
+                }
                 break;
                 
             case DragEndBehavior.STAY_AT_DROP_POSITION:
@@ -416,8 +418,10 @@ export class 可拖动Component extends Component {
                 break;
                 
             case DragEndBehavior.RETURN_TO_ORIGINAL:
-                // 返回到拖拽开始的位置
-                this.node.setPosition(this.nodeStartPos);
+                // 返回到拖拽开始的位置（仅在回退信息未被清除时）
+                if (this.nodeStartPos) {
+                    this.node.setPosition(this.nodeStartPos);
+                }
                 break;
                 
             case DragEndBehavior.STAY_AT_DROP_POSITION:
@@ -431,5 +435,20 @@ export class 可拖动Component extends Component {
             this.placeholderNode.destroy();
             this.placeholderNode = null;
         }
+    }
+
+    // 公共方法：清除回退信息，调用后无论什么模式都不会返回原位置
+    public clearRollbackInfo(): void {
+        // 删除占位节点
+        if (this.placeholderNode) {
+            this.placeholderNode.destroy();
+            this.placeholderNode = null;
+        }
+        
+        // 清除回退信息
+        this.originalParent = null;
+        this.originalSiblingIndex = -1;
+        this.originalWorldPos = null;
+        this.nodeStartPos = null;
     }
 }

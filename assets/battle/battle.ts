@@ -106,6 +106,21 @@ export class battle extends Component {
 
         this.合成按钮.getComponent(Button).interactable = false;
 
+        this.牌物品栏.addComponent(可被拖到Component);
+        this.牌物品栏.getComponent(可被拖到Component).world = this.world;
+        this.牌物品栏.getComponent(可被拖到Component).setLayer(2);
+        this.牌物品栏.getComponent(可被拖到Component).onDragDrop = (draggable: 可拖动Component): void => {
+            const card = draggable.node.getComponent(牌);
+            if(!card){
+                assert(false, "牌物品栏中不应该有非牌的节点");
+            }
+            draggable.clearRollbackInfo();
+            card.牌状态 = 牌状态.在牌物品栏;
+            draggable.node.setParent(this.牌物品栏);
+            draggable.node.setPosition(0, 0, 0);
+            draggable.layer = 1;
+        } 
+
         for(let i = 0; i < 3; i++){
             const 合成槽位 = resourceManager.get_assets<Prefab>(静态配置.instance.合成槽位prefab_path);
 
@@ -119,7 +134,12 @@ export class battle extends Component {
                     assert(false, "合成槽位中不应该有非牌的节点");
                 }
 
-                draggable.dragEndBehavior = DragEndBehavior.STAY_AT_DROP_POSITION;
+                // draggable.dragEndBehavior = DragEndBehavior.STAY_AT_DROP_POSITION;
+                draggable.node.setParent(合成槽位实例);
+                draggable.node.setPosition(0, 0, 0);
+                card.牌状态 = 牌状态.在合成区域;
+                draggable.layer = 2;
+                draggable.clearRollbackInfo();
             }
             this.合成物品栏.addChild(合成槽位实例);
         }
