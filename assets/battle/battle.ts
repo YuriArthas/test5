@@ -54,17 +54,9 @@ export class battle extends Component {
     @property(Node)
     public 合成物品栏: Node = null;
 
-    public world: World = undefined;
+    public world: BattleWorld = undefined;
 
-    public team_0: Team = undefined;
-
-    public team_1: Team = undefined;
-
-    public player_0: Player = undefined;
-
-    public player_1: Player = undefined;
-
-    private 局数据: 局数据 = undefined;
+    
 
     生成局数据() {
         return {
@@ -83,23 +75,12 @@ export class battle extends Component {
         const 牌数据Map = 静态配置.instance.牌数据Map;
         await resourceManager.loadAll<Prefab>(Array.from(牌数据Map.values()).map(card => card.prefab));
 
-        this.world = create_world(World);
+        this.world = create_world(BattleWorld);
+        this.world.battle = this;
         this.world.node.setParent(this.node);
+        this.world.init();
 
-        this.team_0 = create_team(Team, 0);
-        this.team_0.node.setParent(this.node);
-
-        this.team_1 = create_team(Team, 1);
-        this.team_1.node.setParent(this.node);
-
-        this.player_0 = create_player(Player, this.team_0);
-        this.player_0.node.setParent(this.node);
-
-        this.player_1 = create_player(Player, this.team_1);
-        this.player_1.node.setParent(this.node);
-
-        this.player_0.asc.属性Map.set("骰子最小数量", new Attr(this.player_0.asc, undefined, 静态配置.instance.骰子个数基础最小值));
-        this.player_0.asc.属性Map.set("骰子最大数量", new Attr(this.player_0.asc, undefined, 静态配置.instance.骰子个数基础最大值));
+        
 
         console.log("loadAll finished");
     }
@@ -245,4 +226,35 @@ export class battle extends Component {
     }
 }
 
+class BattleWorld extends World {
+    battle: battle = undefined;
+    
+    public team_0: Team = undefined;
 
+    public team_1: Team = undefined;
+
+    public player_0: Player = undefined;
+
+    public player_1: Player = undefined;
+
+    private 局数据: 局数据 = undefined;
+
+    public 牌数据Map: Map<string, 牌数据> = new Map();
+
+    init(){
+        this.team_0 = create_team(Team, 0);
+        this.team_0.node.setParent(this.node);
+
+        this.team_1 = create_team(Team, 1);
+        this.team_1.node.setParent(this.node);
+
+        this.player_0 = create_player(Player, this.team_0);
+        this.player_0.node.setParent(this.node);
+
+        this.player_1 = create_player(Player, this.team_1);
+        this.player_1.node.setParent(this.node);
+
+        this.player_0.asc.属性Map.set("骰子最小数量", new Attr(this.player_0.asc, undefined, 静态配置.instance.骰子个数基础最小值));
+        this.player_0.asc.属性Map.set("骰子最大数量", new Attr(this.player_0.asc, undefined, 静态配置.instance.骰子个数基础最大值));
+    }
+}
