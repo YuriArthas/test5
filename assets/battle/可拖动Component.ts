@@ -37,6 +37,9 @@ export class 可拖动Component extends Component {
     @property({ type: DragEndBehavior })
     dragEndBehavior: DragEndBehavior = DragEndBehavior.RETURN_TO_PLACEHOLDER;  // 拖拽结束后的行为
 
+    @property
+    isDragEnabled: boolean = true;  // 是否可以拖动
+
     private isDragging: boolean = false;
     private dragStartPos: Vec3;
     private nodeStartPos: Vec3;
@@ -86,6 +89,8 @@ export class 可拖动Component extends Component {
     }
 
     private onTouchStart(event: EventTouch): void {
+        if (!this.isDragEnabled) return;
+        
         this.isDragging = true;
         
         // 记录开始拖拽时的位置

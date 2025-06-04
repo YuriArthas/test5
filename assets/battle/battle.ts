@@ -4,7 +4,7 @@ import { 牌数据 } from './牌数据';
 import { 静态配置 } from '../静态配置';
 import { Attr, BaseAttr } from './GAS/属性';
 import resourceManager from './ResourceManager';
-import { 牌, 牌状态 } from './牌';
+import { 牌, 牌可拖到Layer, 牌状态 } from './牌';
 import { ASC } from './GAS/AbilitySystemComponent';
 import { create_unit, Unit } from './GAS/Unit';
 import { create_player, Player } from './GAS/Player';
@@ -118,7 +118,6 @@ export class battle extends Component {
             card.牌状态 = 牌状态.在牌物品栏;
             draggable.node.setParent(this.牌物品栏);
             draggable.node.setPosition(0, 0, 0);
-            draggable.layer = 1;
         } 
 
         for(let i = 0; i < 3; i++){
@@ -127,8 +126,13 @@ export class battle extends Component {
             const 合成槽位实例 = instantiate(合成槽位);
             const 可被拖到 = 合成槽位实例.addComponent(可被拖到Component);
             可被拖到.world = this.world;
-            可被拖到.setLayer(1);
+            可被拖到.setLayer(牌可拖到Layer.合成区域);
             可被拖到.onDragDrop = (draggable: 可拖动Component): void => {
+                for(let elem of 合成槽位实例.children){
+                    if(elem.getComponent(牌)){
+                        return;
+                    }
+                }
                 const card = draggable.node.getComponent(牌);
                 if(!card){
                     assert(false, "合成槽位中不应该有非牌的节点");
@@ -138,7 +142,6 @@ export class battle extends Component {
                 draggable.node.setParent(合成槽位实例);
                 draggable.node.setPosition(0, 0, 0);
                 card.牌状态 = 牌状态.在合成区域;
-                draggable.layer = 2;
                 draggable.clearRollbackInfo();
             }
             this.合成物品栏.addChild(合成槽位实例);
@@ -267,7 +270,7 @@ export class battle extends Component {
     }
 }
 
-class BattleWorld extends World {
+export class BattleWorld extends World {
     battle: battle = undefined;
     
     public team_0: Team = undefined;
