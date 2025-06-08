@@ -3,9 +3,7 @@ import { 静态配置 } from "../静态配置";
 import resourceManager from "../battle/ResourceManager";
 import { 牌, I牌数据, 牌目标 } from "../battle/牌";
 import { ASC } from "./GAS/AbilitySystemComponent";
-import { create_pawn } from "./GAS/Pawn";
-import { Player } from "./GAS/Player";
-import { World } from "./GAS/World";
+import { create_pawn, Player, World } from "./GAS/Unit";
 
 const { ccclass, property } = _decorator;
 
@@ -13,7 +11,7 @@ export class 牌数据 implements I牌数据 {
     name: string;
     合成材料: I牌数据[];
     prefab?: string;
-    牌class?: new () => 牌;
+    牌class?: typeof 牌;
 
     aim: 牌目标;
 
@@ -92,7 +90,11 @@ export class 牌数据 implements I牌数据 {
             }
         }
 
-        const card = create_pawn(this.牌class, world, player, cardNode);
+        const card = create_pawn(this.牌class, {
+            world: world,
+            node: cardNode,
+            player: player,
+        }); 
         card.牌数据 = this;
         
         return card;

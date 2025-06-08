@@ -1,8 +1,6 @@
 import { _decorator, Component, Node, Button } from 'cc';
 import { 牌数据 } from './牌数据';
-import { Pawn } from './GAS/Pawn';
-import { Player } from './GAS/Player';
-import { World } from './GAS/World';
+import { Pawn, Player, World } from './GAS/Unit';
 import { 可拖动Component } from './可拖动Component';
 import { BattleWorld } from './battle';
 const { ccclass, property } = _decorator;
@@ -45,9 +43,6 @@ export interface I牌数据 {
     create_card(world: World, player: Player): 牌;
 }
 
-
-
-@ccclass('牌')
 export class 牌 extends Pawn {
     protected _牌状态: 牌状态 = 牌状态.None;
     可拖动: 可拖动Component = undefined;
@@ -87,7 +82,7 @@ export class 牌 extends Pawn {
     /**
      * 销毁时清理
      */
-    protected onDestroy(): void {
+    onDestroy(): void {
         this.node.off(Button.EventType.CLICK);
     }
 

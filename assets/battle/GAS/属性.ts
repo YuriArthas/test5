@@ -1,12 +1,13 @@
 import { assert } from "cc";
 import { ASC as ASC } from "./AbilitySystemComponent";
+import { Pawn, Player, Team } from "./Unit";
 
 
 export class AttrOperator {
-    value: BaseAttr;
+    value: BaseAttribute;
     op: AttrOperatorType;
 
-    constructor(op: AttrOperatorType, value: BaseAttr) {
+    constructor(op: AttrOperatorType, value: BaseAttribute) {
         this.value = value;
         this.op = op;
     }
@@ -15,35 +16,39 @@ export class AttrOperator {
 
 export type AttrOperatorType = "add" | "add_mul" | "set" | "mul_mul" ;
 
-type type属性构造函数 = new (asc: ASC, formula?: AttrFormula, base_value?: number) => Attr;
-type type属性创建Factory = {
-    constructor_func?: type属性构造函数;
+export type type属性构造函数 = new (asc: ASC, name: string, base_value?: number) => Attribute;
+export type type属性创建Factory = {
+    attr_class?: type属性构造函数;
     base_value?: number;
     formula?: AttrFormula;
+
+    pawn_max_attr_name?: string;
+    pawn_min_attr_name?: string;
 }
 
 export class 属性静态注册器 {
-    static 注册(name: string, factory: type属性创建Factory) {
+    default_attr_formula_builder: (attr_name: string) => AttrFormula = undefined;
+
+    注册(name: string, factory: type属性创建Factory) {
         if(属性静态注册器.属性构造Map.has(name)) {
             throw new Error(`属性 ${name} 已存在`);
         }
         属性静态注册器.属性构造Map.set(name, factory);
     }
 
-    static 获取(name: string): type属性创建Factory {
+    获取(name: string): type属性创建Factory {
         if(属性静态注册器.属性构造Map.has(name)) {
             return 属性静态注册器.属性构造Map.get(name);
         }
         throw new Error(`属性 ${name} 不存在`);
     }
 
-    static 创建(name: string, asc: ASC, base_value: number = undefined, formula: AttrFormula = undefined): Attr {
-        let 工厂 = 属性静态注册器.获取(name);
+    创建(name: string, asc: ASC, base_value: number = undefined): Attribute {
+        let 工厂 = this.获取(name);
         if(工厂 === undefined) {
             工厂 = {
-                constructor_func: Attr,
+                attr_class: Attribute,
                 base_value: 0,
-                formula: formula
             };
         }
 
@@ -54,31 +59,49 @@ export class 属性静态注册器 {
             }
         }
 
-        if(formula === undefined) {
-            formula = 工厂.formula;
+        
+        let formula = 工厂.formula;
+        if(!formula && this.default_attr_formula_builder){
+            formula = this.default_attr_formula_builder(name);
         }
 
-        const attr = new 工厂.constructor_func(asc, formula, base_value);
+        const attr = new 工厂.attr_class(asc, name, base_value);
+        if(formula){
+            attr.set_formula(formula);
+        }
+
+        if(attr.asc.unit instanceof Pawn){
+            if(工厂.pawn_max_attr_name){
+                const max_attr = attr.asc.get_attribute(工厂.pawn_max_attr_name);
+                attr.max_attr = max_attr;
+            }
+            if(工厂.pawn_min_attr_name){
+                const min_attr = attr.asc.get_attribute(工厂.pawn_min_attr_name);
+                attr.min_attr = min_attr;
+            }
+        }
+
         return attr;
     }
 
     static 属性构造Map: Map<string, type属性创建Factory> = new Map();
+    
 }
 
 // 这个类以后有用
-class AttrSourceCollection {
+export class AttrSourceCollection {
 
 }
 
 
-type AttrFomulaResult = [number, number, number];
+export type AttrFomulaResult = [number, number, number];
 
-type AttrFormula = (source_collection?: AttrSourceCollection) => Readonly<AttrFomulaResult>;
+export type AttrFormula = (attr: Attribute, source_collection?: AttrSourceCollection) => Readonly<AttrFomulaResult>;
 
-export class BaseAttr{
-    protected _dirty_publisher_array?: BaseAttr[];
-    protected _dirty_subscriber_array?: BaseAttr[];
-    protected dirty_event_list: ((attr: BaseAttr, old_value: number) => void)[];
+export class BaseAttribute{
+    protected _dirty_publisher_array?: BaseAttribute[];
+    protected _dirty_subscriber_array?: BaseAttribute[];
+    protected dirty_event_list: ((attr: BaseAttribute, old_value: number) => void)[];
 
     _base_value: number = 0;
     _dirty: boolean = true;
@@ -104,14 +127,14 @@ export class BaseAttr{
         this.to_dirty(true);
     }
 
-    protected static _dirty_and_collect(list: [BaseAttr, number][], attr: BaseAttr){
+    protected static _dirty_and_collect(list: [BaseAttribute, number][], attr: BaseAttribute){
         attr._dirty = true;
         list.push([attr, attr.cached_value()]);
 
         if(attr._dirty_subscriber_array) {
             for(let elem of attr._dirty_subscriber_array) {
                 if(elem._dirty == false) {
-                    Attr._dirty_and_collect(list, elem);
+                    Attribute._dirty_and_collect(list, elem);
                 }
             }
         }
@@ -126,8 +149,10 @@ export class BaseAttr{
             return;
         }
 
-        const dirty_list: [BaseAttr, number][] = [];
-        Attr._dirty_and_collect(dirty_list, this);
+        const dirty_list: [BaseAttribute, number][] = [];
+        Attribute._dirty_and_collect(dirty_list, this);
+
+        this.disconnect_all_subscriber();
 
         if(trigger_dirty_event) {
             for(let [elem, old_value] of dirty_list) {
@@ -140,7 +165,7 @@ export class BaseAttr{
         }
     }
 
-    subscribe_dirty_change(obj: BaseAttr): void {
+    subscribe_dirty_change(obj: BaseAttribute): void {
         if(this._dirty_subscriber_array === undefined) {
             this._dirty_subscriber_array = [];
         }
@@ -152,7 +177,7 @@ export class BaseAttr{
         obj._dirty_publisher_array.push(this);
     }
 
-    unsubscribe_dirty_change(obj: BaseAttr): void {
+    unsubscribe_dirty_change(obj: BaseAttribute): void {
         // 从当前对象的订阅者数组中移除 obj
         if(this._dirty_subscriber_array !== undefined) {
             const index = this._dirty_subscriber_array.indexOf(obj);
@@ -218,26 +243,24 @@ export class BaseAttr{
     }
 }
 
-export class Attr extends BaseAttr{
-    asc: ASC;
+export class Attribute extends BaseAttribute{
+    asc: ASC = undefined;
     protected _attr_operator_list?: AttrOperator[];
 
-    _base_add_mul: number = 0;
-    _base_mul_mul: number = 1;
-    _cached_result: Readonly<AttrFomulaResult> = undefined;
-    _final_value: number = undefined;
-    _formula: AttrFormula = undefined;
-    _min_attr: BaseAttr;
-    _max_attr: BaseAttr;
+    name: string = undefined;
+    protected _base_add_mul: number = 0;
+    protected _base_mul_mul: number = 1;
+    protected _cached_result: Readonly<AttrFomulaResult> = undefined;
+    protected _final_value: number = undefined;
+    protected _formula: AttrFormula = undefined;
+    protected _min_attr: BaseAttribute;
+    protected _max_attr: BaseAttribute;
 
 
-    constructor(asc: ASC, formula?: AttrFormula, base_value?: number) {
-        super();
+    constructor(asc: ASC, name: string, base_value?: number) {
+        super(base_value);
+        this.name = name;
         this.asc = asc;
-        this._formula = formula;
-        if(base_value !== undefined) {
-            this._base_value = base_value;
-        }
         this._final_value = 0;
     }
 
@@ -268,6 +291,8 @@ export class Attr extends BaseAttr{
         return this._cached_result;
     }
 
+    
+
     calc_modifier(source_collection?: AttrSourceCollection): AttrFomulaResult {
         let plus = this._base_value;
         let add_mul = this._base_add_mul;
@@ -295,12 +320,95 @@ export class Attr extends BaseAttr{
         return [plus, add_mul, mul_mul];
     }
 
+    calc_inherit(source_collection?: AttrSourceCollection): AttrFomulaResult {
+    
+        const ret: AttrFomulaResult = [0, 0, 1];
+        const unit = this.asc.unit;
+        if(unit instanceof Pawn){
+            if(unit.player){
+                const player_attr = unit.player.asc.get_attribute(this.name);
+                if(player_attr instanceof Attribute){
+                    const r = player_attr.cached_result();
+                    ret[0] += r[0];
+                    ret[1] += r[1];
+                    ret[2] *= r[2];
+                }else{
+                    ret[0] += player_attr.value();
+                }
+                this.subscribe_dirty_change(player_attr);
+            }
+        }else if(unit instanceof Player){
+            if(unit.team){
+                const team_attr = unit.team.asc.get_attribute(this.name);
+                if(team_attr instanceof Attribute){
+                    const r = team_attr.cached_result();
+                    ret[0] += r[0];
+                    ret[1] += r[1];
+                    ret[2] *= r[2];
+                }else{
+                    ret[0] += team_attr.value();
+                }
+                this.subscribe_dirty_change(team_attr);
+            }
+        }else if(unit instanceof Team){
+            if(unit.asc.world){
+                const world_attr = unit.asc.world.asc.get_attribute(this.name);
+                if(world_attr instanceof Attribute){
+                    const r = world_attr.cached_result();
+                    ret[0] += r[0];
+                    ret[1] += r[1];
+                    ret[2] *= r[2];
+                }else{
+                    ret[0] += world_attr.value();
+                }
+                this.subscribe_dirty_change(world_attr);
+            }
+        }
+        
+        return ret;
+    }
+
+    formula(): AttrFormula {
+        return this._formula;
+    }
+
+    set_formula(formula: AttrFormula): void {
+        this._formula = formula;
+        this.to_dirty(true);
+    }
+
+    set base_add_mul(value: number) {
+        this._base_add_mul += value;
+        this.to_dirty(true);
+    }
+
+    get base_add_mul(): number {
+        return this._base_add_mul;
+    }
+
+    set base_mul_mul(value: number) {
+        this._base_mul_mul = value;
+        this.to_dirty(true);
+    }
+
+    get base_mul_mul(): number {
+        return this._base_mul_mul;
+    }
+
+    static calc_final_value(value: number, cached_result: Readonly<AttrFomulaResult>): number {
+        return (value + cached_result[0]) * (1 + cached_result[1]) * cached_result[2];
+    }
 
     do_refresh_value(source_collection?: AttrSourceCollection) {
         this.disconnect_all_subscriber();
         const r = this.calc_modifier(source_collection);
+        const r2 = this.calc_inherit(source_collection);
+        r[0] += r2[0];
+        r[1] += r2[1];
+        r[2] *= r2[2];
+
         if(this._formula) {
-            const v = this._formula(source_collection);
+            const v = this._formula(this, source_collection);
             r[0] += v[0];
             r[1] += v[1];
             r[2] *= v[2];
@@ -309,44 +417,32 @@ export class Attr extends BaseAttr{
         this._cached_result = r;
         this._final_value = (r[0]) * (1 + r[1]) * r[2];
 
-        if(this._min_attr !== undefined) {
-            this._final_value = Math.max(this._final_value, this._min_attr.value());
+        if(this._max_attr !== undefined) {
+            this.subscribe_dirty_change(this._max_attr);
+            this._final_value = Math.min(this._final_value, this._max_attr.value());
         }
 
-        if(this._max_attr !== undefined) {
-            this._final_value = Math.min(this._final_value, this._max_attr.value());
+        if(this._min_attr !== undefined) {
+            this.subscribe_dirty_change(this._min_attr);
+            this._final_value = Math.max(this._final_value, this._min_attr.value());
         }
 
         this._dirty = false;
     }
 
-
-
-    get min_attr(): BaseAttr {
+    get min_attr(): BaseAttribute {
         return this._min_attr;
     }
-    set min_attr(attr: BaseAttr) {
-        if(this._min_attr) {
-            this.unsubscribe_dirty_change(this._min_attr);
-        }
+    set min_attr(attr: BaseAttribute) {
         this._min_attr = attr;
-        if(attr) {
-            this.subscribe_dirty_change(attr);
-        }
         this.to_dirty(true);
     }
 
-    get max_attr(): BaseAttr {
+    get max_attr(): BaseAttribute {
         return this._max_attr;
     }
-    set max_attr(attr: BaseAttr) {
-        if(this._max_attr) {
-            this.unsubscribe_dirty_change(this._max_attr);
-        }
+    set max_attr(attr: BaseAttribute) {
         this._max_attr = attr;
-        if(attr) {
-            this.subscribe_dirty_change(attr);
-        }
         this.to_dirty(true);
     }
 

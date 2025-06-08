@@ -2,17 +2,16 @@ import { _decorator, assert, assetManager, Button, CCInteger, Component, instant
 import { 局数据 } from './存档';
 import { 牌数据 } from './牌数据';
 import { 静态配置 } from '../静态配置';
-import { Attr, BaseAttr } from './GAS/属性';
+import { Attribute, AttrFomulaResult, AttrSourceCollection, BaseAttribute } from './GAS/属性';
 import resourceManager from './ResourceManager';
 import { 牌, 牌可拖到Layer, 牌状态 } from './牌';
 import { ASC } from './GAS/AbilitySystemComponent';
-import { create_unit, Unit } from './GAS/Unit';
-import { create_player, Player } from './GAS/Player';
-import { create_world, World } from './GAS/World';
-import { create_team, Team } from './GAS/Team';
+import { World, Player, Team, Pawn, UnitInitData, create_unit } from './GAS/Unit';
 import { 可被拖到Component } from './可被拖到Component';
 import { DragEndBehavior, 可拖动Component } from './可拖动Component';
+import { BaseCharacter, BaseCharacterInitData } from './pawns/BaseCharacter';
 const { ccclass, property } = _decorator;
+
 
 class BattleInitData {
     public 骰子数量: number = 0;
@@ -77,12 +76,8 @@ export class battle extends Component {
         // const 牌数据Map = 静态配置.instance.牌数据Map;
         // await resourceManager.loadAll<Prefab>(Array.from(牌数据Map.values()).map(card => card.prefab));
 
-        this.world = create_world(BattleWorld);
+        this.world = create_unit(BattleWorld, {world: undefined, node: this.node});
         this.world.battle = this;
-        this.world.node.setParent(this.node);
-        this.world.init();
-
-        
 
         console.log("loadAll finished");
     }
@@ -145,6 +140,8 @@ export class battle extends Component {
                 draggable.clearRollbackInfo();
             }
             this.合成物品栏.addChild(合成槽位实例);
+
+            this.on_战斗开始按钮_click();
         }
     }
 
@@ -235,8 +232,87 @@ export class battle extends Component {
         }
     }
 
-    on_战斗开始按钮_click() {
+    /**
+     * 递归查找指定名称的子节点
+     */
+    private findChildRecursively(parent: Node, name: string): Node | null {
+        // 首先检查直接子节点
+        for (let child of parent.children) {
+            if (child.name === name) {
+                return child;
+            }
+        }
+        
+        // 如果直接子节点中没找到，递归查找每个子节点的子节点
+        for (let child of parent.children) {
+            const found = this.findChildRecursively(child, name);
+            if (found) {
+                return found;
+            }
+        }
+        
+        return null;
+    }
 
+    /**
+     * 根据路径查找子节点，支持用"/"分割的字符串路径或字符串数组路径
+     * @param parent 父节点
+     * @param path 路径，可以是字符串如 "child1/child2/child3" 或字符串数组如 ["child1", "child2", "child3"]
+     * @returns 找到的节点或undefined
+     */
+    private GetChildByName(parent: Node, path: string | string[]): Node | undefined {
+        if (!path) {
+            return parent;
+        }
+
+        let pathParts: string[];
+        
+        if (typeof path === 'string') {
+            if (path.trim() === "") {
+                return parent;
+            }
+            pathParts = path.split('/').filter(part => part.trim() !== '');
+        } else {
+            // path 是字符串数组
+            pathParts = path.filter(part => part && part.trim() !== '');
+        }
+        
+        if (pathParts.length === 0) {
+            return parent;
+        }
+        
+        let currentNode = parent;
+        for (const partName of pathParts) {
+            const found = currentNode.getChildByName(partName);
+            if (!found) {
+                return undefined;
+            }
+            currentNode = found;
+        }
+        
+        return currentNode;
+    }
+
+    
+
+    on_战斗开始按钮_click() {
+        this.战斗开始按钮.active = false;
+        const hero_position = this.findChildRecursively(this.node, "hero_position");
+
+        const hero_config = 静态配置.instance.单位数据Map.get("英雄1");
+
+        const heroUnit = instantiate(resourceManager.get_assets<Prefab>(hero_config.prefab));
+        heroUnit.setParent(hero_position.parent);
+        heroUnit.setPosition(hero_position.position);
+
+        const hero = create_unit(hero_config.pawn_class, {
+            world: this.world,
+            node: heroUnit,
+            player: this.world.player_0,
+            unit_data: hero_config,
+        });
+    
+        
     }
 
     on_随机按钮_click() {
@@ -285,20 +361,41 @@ export class BattleWorld extends World {
 
     public 牌数据Map: Map<string, 牌数据> = new Map();
 
-    init(){
-        this.team_0 = create_team(Team, 0);
+    init(init_data: UnitInitData){
+        super.init(init_data);
+        this.init_attr_register();
+
+        this.team_0 = create_unit(Team, {world: this, team_id: 0});
         this.team_0.node.setParent(this.node);
 
-        this.team_1 = create_team(Team, 1);
+        this.team_1 = create_unit(Team, {world: this, team_id: 1});
         this.team_1.node.setParent(this.node);
 
-        this.player_0 = create_player(Player, this.team_0);
+        this.player_0 = create_unit(Player, {world: this, team: this.team_0});
         this.player_0.node.setParent(this.node);
 
-        this.player_1 = create_player(Player, this.team_1);
+        this.player_1 = create_unit(Player, {world: this, team: this.team_1});
         this.player_1.node.setParent(this.node);
 
-        this.player_0.asc.属性Map.set("骰子最小数量", new Attr(this.player_0.asc, undefined, 静态配置.instance.骰子个数基础最小值));
-        this.player_0.asc.属性Map.set("骰子最大数量", new Attr(this.player_0.asc, undefined, 静态配置.instance.骰子个数基础最大值));
+
+        this.player_0.asc.属性Map.set("骰子最小数量", this.属性静态注册器.创建("骰子最小数量", this.player_0.asc));
+        this.player_0.asc.属性Map.set("骰子最大数量", this.属性静态注册器.创建("骰子最大数量", this.player_0.asc));
+
+        
+    }
+
+    
+
+    init_attr_register(){
+
+        this.属性静态注册器.注册("骰子最小数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最小值});
+
+        this.属性静态注册器.注册("骰子最大数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最大值});
+
+        this.属性静态注册器.注册("生命", {attr_class: Attribute, base_value: 1, pawn_max_attr_name: "生命最大值"});
+
+        this.属性静态注册器.注册("生命最大值", {attr_class: Attribute, base_value: 1});
+
+        
     }
 }

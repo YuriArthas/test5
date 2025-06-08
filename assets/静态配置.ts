@@ -1,6 +1,12 @@
 import { Component, assert } from "cc";
 import { 牌数据 } from "./battle/牌数据";
 import { 牌, 牌目标 } from "./battle/牌";
+import { Pawn } from "./battle/GAS/Unit";
+import { AttrFomulaResult } from "./battle/GAS/属性";
+import { AbilitySpec } from "./battle/GAS/AbilitySpec";
+import { Hero } from "./battle/pawns/hero";
+import { 拳打Spec } from "./battle/Abilities";
+import { BaseCharacter } from "./battle/pawns/BaseCharacter";
 
 export enum 牌名字 {
     // 攻击
@@ -86,7 +92,7 @@ type 牌初始化配置 = {
     name: 牌名字;
     合成材料: 牌名字[];
     面prefab?: string;
-    component?: new () => 牌;
+    component?: typeof 牌;
     战斗prefab?: string;
     num?: {
         min: number;
@@ -97,13 +103,26 @@ type 牌初始化配置 = {
     type: 牌类型;
 }
 
+export class 单位数据 {
+    name: string = undefined;
+    prefab?: string = undefined;
+    pawn_class?: typeof BaseCharacter = undefined;
+    
+    attr_list: {name: string, value: number | AttrFomulaResult}[] = [];
+
+    ability_list: typeof AbilitySpec[] = [];
+}
+
 
 export class 静态配置 {
     牌数据Map: Map<string, 牌数据> = new Map();
+    单位数据Map: Map<string, 单位数据> = new Map();
     骰子个数基础最小值: number = 4;
     骰子个数基础最大值: number = 8;
     通用牌prefab_path: string = '6ca0aa92-bd00-4939-b276-3acbd1bc7513';
     合成槽位prefab_path: string = 'b0d4e98f-c7b3-4c82-aeda-6ca24dbdb4e5';
+    通用英雄prefab_path: string = '960a214e-b3f5-4444-832e-68b9393ddcd4';
+    
     private static _instance: 静态配置;
     public static get instance(): 静态配置 {
         if (!this._instance) {
@@ -128,9 +147,30 @@ export class 静态配置 {
         this.add_card({name: 牌名字.奖励骰子, 合成材料: [], type: 牌类型.特殊});
         this.add_card({name: 牌名字.水晶骰子, 合成材料: [], type: 牌类型.特殊});
 
-
-
         this.处理牌子引用();
+
+        this.创建单位数据({name: "英雄1", pawn_class: Hero,
+            attr_list: [
+                {name: "生命",value: 100},
+                {name: "攻击",value: 10},
+                {name: "防御",value: 10},
+                {name: "速度",value: 10},
+                {name: "暴击率",value: 0.1},
+            ],
+            ability_list: [
+                拳打Spec,
+            ],
+        });
+
+
+    }
+
+    private 创建单位数据(config: 单位数据) {
+        if(!config.prefab){
+            config.prefab = this.通用英雄prefab_path;
+        }
+        
+        this.单位数据Map.set(config.name, config);
     }
 
     private add_card(config: 牌初始化配置) {

@@ -1,7 +1,7 @@
-import { _decorator, Component, Node } from 'cc';
+import { _decorator, Component } from 'cc';
 import { Effect } from './Effect';
-import { Attr, BaseAttr } from './属性';
-import { Unit } from './Unit';
+import { Attribute, AttrFormula, BaseAttribute } from './属性';
+import type { Unit, World} from './Unit';
 import { AbilitySpec } from './AbilitySpec';
 import { AbilityInstance } from './AbilityInstance';
 const { ccclass, property } = _decorator;
@@ -96,8 +96,8 @@ export class GAS_BaseComponent extends Component {
     
 }
 
-@ccclass('ASC')
-export class ASC extends GAS_BaseComponent{
+export class ASC{
+    world: World;
     unit: Unit; // 每个ASC都必然有一个Unit
     owned_tags: Map<ITagName, number> = new Map();
     blocked_other_tags: Map<ITagName, number> = new Map();
@@ -109,5 +109,24 @@ export class ASC extends GAS_BaseComponent{
 
     running_ability_instance_list: AbilityInstance[] = [];
     
-    属性Map: Map<string, BaseAttr> = new Map();
+    属性Map: Map<string, BaseAttribute> = new Map();
+
+    default_attr_formula: AttrFormula;
+
+    get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist: boolean = true): T {
+        let attr = this.属性Map.get(name);
+        if(!attr && create_if_not_exist) {
+            attr = this.world.属性静态注册器.创建(name, this);
+            if(this.default_attr_formula && attr instanceof Attribute){
+                attr.set_formula(this.default_attr_formula);
+            }
+            this.属性Map.set(name, attr);
+        }
+
+        return attr as T;
+    }
+
+    cast_ability(){
+
+    }
 }

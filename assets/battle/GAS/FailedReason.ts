@@ -10,7 +10,7 @@ export class SimpleFailedReason extends FailedReason {
     }
 }
 
-export class FailedReasonContainer {
+export type FailedReasonContainer = {
     value: FailedReason;
 }
 

@@ -4,6 +4,7 @@ import { Effect } from "./Effect";
 import { FailedReason, FailedReasonContainer, SimpleFailedReason } from "./FailedReason";
 import { Unit } from "./Unit";
 import { Vec2 } from "cc";
+import { Attribute } from "./属性";
 
 type Point = Vec2;
 
@@ -23,6 +24,12 @@ export class AbilitySpec {
     asc: ASC;
     running_ability_instance_list: AbilityInstance[] = [];
 
+    cast_range(): number {
+        const attr = this.asc.get_attribute<Attribute>("施法距离");
+        const cached_result = attr.cached_result();
+        return Attribute.calc_final_value(attr.base_value, cached_result);
+    }
+
     constructor(asc: ASC) {
         this.asc = asc;
     }
@@ -31,8 +38,8 @@ export class AbilitySpec {
         return AbilityTargetType.NONE;
     }
 
-    try_cast(target: AbilityTarget, reason?: FailedReasonContainer): boolean{
-        let to_check_effects = this.generate_to_check_effects();
+    cast(target: AbilityTarget, reason?: FailedReasonContainer): boolean{
+        let to_check_effects = this.get_to_check_effects();
         if(!this.can_cast(target, to_check_effects, reason)) {
             return false;
         }
@@ -113,7 +120,7 @@ export class AbilitySpec {
         return true;
     }
 
-    ability_instance_class(): new (asc: ASC, spec: AbilitySpec, target: AbilityTarget) => AbilityInstance{
+    ability_instance_class(): typeof AbilityInstance{
         throw new Error("AbilitySpec.ability_instance_class() must be implemented");
     }
 
@@ -129,7 +136,7 @@ export class AbilitySpec {
         return undefined;
     }
 
-    generate_to_check_effects(): Effect[] {
+    get_to_check_effects(): Effect[] {
         return undefined;
     }
 }

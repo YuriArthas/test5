@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "cocos-creator-mcp": {
+      "command": "node",
+      "args": ["F:/cocos/tests/test5/cursor-mcp-server/dist/index.js"],
+      "env": {},
+      "description": "Cocos Creator项目分析MCP服务器"
+    }
+  }
+} 

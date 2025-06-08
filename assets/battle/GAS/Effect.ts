@@ -1,7 +1,7 @@
 import { _decorator, assert, Component } from "cc";
 import { ASC, ITagName } from "./AbilitySystemComponent";
 import { GAS_BaseComponent } from "./AbilitySystemComponent";
-import { Attr, AttrOperator, AttrOperatorType, BaseAttr, 属性静态注册器 } from "./属性";
+import { Attribute, AttrOperator, AttrOperatorType, BaseAttribute, 属性静态注册器 } from "./属性";
 import { FailedReasonContainer, SimpleFailedReason } from "./FailedReason";
 import { AbilityInstance } from "./AbilityInstance";
 const { ccclass, property } = _decorator;
@@ -12,13 +12,12 @@ export enum TagListEnum {
 }
 
 export class AttrModifier {
-    aim_name: string;
-    attr_operator: AttrOperator;
-    test_func: (gas: ASC) => boolean;
+    aim_name: string = undefined;
+    attr_operator: AttrOperator = undefined;
+    private _attached_attr: Attribute = undefined;
+    test_func: (asc: ASC) => boolean;
 
-    private _attached_attr: Attr;
-
-    constructor(aim_name: string, op: AttrOperatorType, value: BaseAttr, test_func?: (gas: ASC) => boolean) {
+    constructor(aim_name: string, op: AttrOperatorType, value: BaseAttribute, test_func?: (gas: ASC) => boolean) {
         this.aim_name = aim_name;
         this.attr_operator = new AttrOperator(op, value);
         if(test_func) {
@@ -26,11 +25,11 @@ export class AttrModifier {
         }
     }
 
-    get attached_attr(): Attr {
+    get attached_attr(): Attribute {
         return this._attached_attr;
     }
 
-    set attached_attr(attr: Attr) {
+    set attached_attr(attr: Attribute) {
         this._attached_attr = attr;
     }
 }
@@ -206,7 +205,7 @@ export class Effect {
             for(let modifier of this.modifier_list) {
                 const attr = this.asc.属性Map.get(modifier.aim_name);
                 assert(attr !== undefined, `attach: 属性 ${modifier.aim_name} 不存在`);
-                assert(attr instanceof Attr, `attach: 属性 ${modifier.aim_name} 不是 Attr`);
+                assert(attr instanceof Attribute, `attach: 属性 ${modifier.aim_name} 不是 Attr`);
                 modifier.attached_attr = attr;
                 attr.add_attr_operator(modifier.attr_operator);
             }
@@ -214,7 +213,7 @@ export class Effect {
             for(let modifier of this.modifier_list) {
                 const attr = this.asc.属性Map.get(modifier.aim_name);
                 assert(attr !== undefined, `attach: 属性 ${modifier.aim_name} 不存在`);
-                assert(attr instanceof Attr, `attach: 属性 ${modifier.aim_name} 不是 Attr`);
+                assert(attr instanceof Attribute, `attach: 属性 ${modifier.aim_name} 不是 Attr`);
                 modifier.attached_attr = attr;
                 modifier.attached_attr.use_attr_operator_immediately(modifier.attr_operator);
             }
