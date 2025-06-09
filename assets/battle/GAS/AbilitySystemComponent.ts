@@ -97,8 +97,8 @@ export class GAS_BaseComponent extends Component {
 }
 
 export class ASC{
-    world: World;
-    unit: Unit; // 每个ASC都必然有一个Unit
+    world: World = undefined;
+    unit: Unit = undefined; // 每个ASC都必然有一个Unit
     owned_tags: Map<ITagName, number> = new Map();
     blocked_other_tags: Map<ITagName, number> = new Map();
 

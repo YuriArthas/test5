@@ -324,44 +324,46 @@ export class Attribute extends BaseAttribute{
     
         const ret: AttrFomulaResult = [0, 0, 1];
         const unit = this.asc.unit;
-        if(unit instanceof Pawn){
-            if(unit.player){
-                const player_attr = unit.player.asc.get_attribute(this.name);
-                if(player_attr instanceof Attribute){
-                    const r = player_attr.cached_result();
-                    ret[0] += r[0];
-                    ret[1] += r[1];
-                    ret[2] *= r[2];
-                }else{
-                    ret[0] += player_attr.value();
+        if(unit){
+            if(unit instanceof Pawn){
+                if(unit.player){
+                    const player_attr = unit.player.asc.get_attribute(this.name);
+                    if(player_attr instanceof Attribute){
+                        const r = player_attr.cached_result();
+                        ret[0] += r[0];
+                        ret[1] += r[1];
+                        ret[2] *= r[2];
+                    }else{
+                        ret[0] += player_attr.value();
+                    }
+                    this.subscribe_dirty_change(player_attr);
                 }
-                this.subscribe_dirty_change(player_attr);
-            }
-        }else if(unit instanceof Player){
-            if(unit.team){
-                const team_attr = unit.team.asc.get_attribute(this.name);
-                if(team_attr instanceof Attribute){
-                    const r = team_attr.cached_result();
-                    ret[0] += r[0];
-                    ret[1] += r[1];
-                    ret[2] *= r[2];
-                }else{
-                    ret[0] += team_attr.value();
+            }else if(unit instanceof Player){
+                if(unit.team){
+                    const team_attr = unit.team.asc.get_attribute(this.name);
+                    if(team_attr instanceof Attribute){
+                        const r = team_attr.cached_result();
+                        ret[0] += r[0];
+                        ret[1] += r[1];
+                        ret[2] *= r[2];
+                    }else{
+                        ret[0] += team_attr.value();
+                    }
+                    this.subscribe_dirty_change(team_attr);
                 }
-                this.subscribe_dirty_change(team_attr);
-            }
-        }else if(unit instanceof Team){
-            if(unit.asc.world){
-                const world_attr = unit.asc.world.asc.get_attribute(this.name);
-                if(world_attr instanceof Attribute){
-                    const r = world_attr.cached_result();
-                    ret[0] += r[0];
-                    ret[1] += r[1];
-                    ret[2] *= r[2];
-                }else{
-                    ret[0] += world_attr.value();
+            }else if(unit instanceof Team){
+                if(unit.asc.world){
+                    const world_attr = unit.asc.world.asc.get_attribute(this.name);
+                    if(world_attr instanceof Attribute){
+                        const r = world_attr.cached_result();
+                        ret[0] += r[0];
+                        ret[1] += r[1];
+                        ret[2] *= r[2];
+                    }else{
+                        ret[0] += world_attr.value();
+                    }
+                    this.subscribe_dirty_change(world_attr);
                 }
-                this.subscribe_dirty_change(world_attr);
             }
         }
         

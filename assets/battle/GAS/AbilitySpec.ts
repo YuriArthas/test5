@@ -21,7 +21,8 @@ export enum AbilityTargetType {
 
 export class AbilitySpec {
 
-    asc: ASC;
+    asc: ASC = undefined;
+    caster: Unit = undefined;
     running_ability_instance_list: AbilityInstance[] = [];
 
     cast_range(): number {
