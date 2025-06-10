@@ -1,7 +1,6 @@
-import { _decorator, assert, Component } from "cc";
+import { _decorator, assert } from "cc";
 import { ASC, ITagName } from "./AbilitySystemComponent";
-import { GAS_BaseComponent } from "./AbilitySystemComponent";
-import { Attribute, AttrOperator, AttrOperatorType, BaseAttribute, 属性静态注册器 } from "./属性";
+import { Attribute, AttrOperator, AttrOperatorType, BaseAttribute, 属性预定义器 } from "./属性";
 import { FailedReasonContainer, SimpleFailedReason } from "./FailedReason";
 import { AbilityInstance } from "./AbilityInstance";
 const { ccclass, property } = _decorator;

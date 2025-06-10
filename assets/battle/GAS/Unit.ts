@@ -1,9 +1,9 @@
-import { ASC, GAS_BaseComponent } from "./AbilitySystemComponent";
-import { _decorator, assert } from "cc";
+import { ASC } from "./AbilitySystemComponent";
+import { _decorator, assert, Component } from "cc";
 import { Node } from "cc";
  
 import { 可被拖到Component } from "../可被拖到Component";
-import { 属性静态注册器 } from "./属性";
+import { 属性预定义器 } from "./属性";
 const { ccclass, property} = _decorator;
 
 export interface UnitInitData {
@@ -21,6 +21,11 @@ export interface TeamInitData extends UnitInitData {
 
 export interface PawnInitData extends UnitInitData {
     player: Player;
+}
+
+
+export class GAS_BaseComponent extends Component {
+    asc: ASC = undefined;
 }
 
 @ccclass('Unit')
@@ -54,7 +59,7 @@ export class World extends Unit {
 
     id_counter: number = 0;
 
-    属性静态注册器: 属性静态注册器 = new 属性静态注册器();
+    属性预定义器: 属性预定义器 = new 属性预定义器();
 
     node_maps: Map<number, Node> = new Map();
 

@@ -378,8 +378,8 @@ export class BattleWorld extends World {
         this.player_1.node.setParent(this.node);
 
 
-        this.player_0.asc.属性Map.set("骰子最小数量", this.属性静态注册器.创建("骰子最小数量", this.player_0.asc));
-        this.player_0.asc.属性Map.set("骰子最大数量", this.属性静态注册器.创建("骰子最大数量", this.player_0.asc));
+        this.player_0.asc.属性Map.set("骰子最小数量", this.属性预定义器.创建("骰子最小数量", this.player_0.asc));
+        this.player_0.asc.属性Map.set("骰子最大数量", this.属性预定义器.创建("骰子最大数量", this.player_0.asc));
 
         
     }
@@ -388,13 +388,13 @@ export class BattleWorld extends World {
 
     init_attr_register(){
 
-        this.属性静态注册器.注册("骰子最小数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最小值});
+        this.属性预定义器.注册("骰子最小数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最小值});
 
-        this.属性静态注册器.注册("骰子最大数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最大值});
+        this.属性预定义器.注册("骰子最大数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最大值});
 
-        this.属性静态注册器.注册("生命", {attr_class: Attribute, base_value: 1, pawn_max_attr_name: "生命最大值"});
+        this.属性预定义器.注册("生命", {attr_class: Attribute, base_value: 1, pawn_max_attr_name: "生命最大值"});
 
-        this.属性静态注册器.注册("生命最大值", {attr_class: Attribute, base_value: 1});
+        this.属性预定义器.注册("生命最大值", {attr_class: Attribute, base_value: 1});
 
         
     }

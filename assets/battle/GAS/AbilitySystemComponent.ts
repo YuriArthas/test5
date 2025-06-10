@@ -1,6 +1,6 @@
-import { _decorator, Component } from 'cc';
+import { _decorator } from 'cc';
 import { Effect } from './Effect';
-import { Attribute, AttrFormula, BaseAttribute } from './属性';
+import { Attribute, AttrFormula, BaseAttribute, IAttributeManager } from './属性';
 import type { Unit, World} from './Unit';
 import { AbilitySpec } from './AbilitySpec';
 import { AbilityInstance } from './AbilityInstance';
@@ -92,11 +92,8 @@ export class TagManager {
     }
 }
 
-export class GAS_BaseComponent extends Component {
-    
-}
-
-export class ASC{
+ 
+export class ASC implements IAttributeManager {
     world: World = undefined;
     unit: Unit = undefined; // 每个ASC都必然有一个Unit
     owned_tags: Map<ITagName, number> = new Map();
@@ -113,10 +110,14 @@ export class ASC{
 
     default_attr_formula: AttrFormula;
 
+    get attached_any(): any {
+        return this.unit;
+    }
+
     get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist: boolean = true): T {
         let attr = this.属性Map.get(name);
         if(!attr && create_if_not_exist) {
-            attr = this.world.属性静态注册器.创建(name, this);
+            attr = this.world.属性预定义器.创建(name, this);
             if(this.default_attr_formula && attr instanceof Attribute){
                 attr.set_formula(this.default_attr_formula);
             }

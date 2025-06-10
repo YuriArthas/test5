@@ -1,6 +1,5 @@
 import { assert } from "cc";
-import { ASC as ASC } from "./AbilitySystemComponent";
-import { Pawn, Player, Team } from "./Unit";
+import { Pawn, Player, Team, World } from "./Unit";
 
 
 export class AttrOperator {
@@ -16,7 +15,7 @@ export class AttrOperator {
 
 export type AttrOperatorType = "add" | "add_mul" | "set" | "mul_mul" ;
 
-export type type属性构造函数 = new (asc: ASC, name: string, base_value?: number) => Attribute;
+export type type属性构造函数 = new (attr_mgr: IAttributeManager, name: string, base_value?: number) => Attribute;
 export type type属性创建Factory = {
     attr_class?: type属性构造函数;
     base_value?: number;
@@ -26,24 +25,37 @@ export type type属性创建Factory = {
     pawn_min_attr_name?: string;
 }
 
-export class 属性静态注册器 {
-    default_attr_formula_builder: (attr_name: string) => AttrFormula = undefined;
+export interface IAttributeAttachable {
+    attribute_manager: IAttributeManager;
+    attribute_manager_inherit?: IAttributeAttachable;
+}
+
+export interface IAttributeManager {
+    get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T;
+    world: World;
+    attached_any: any;
+    属性Map: Map<string, BaseAttribute>;
+    default_attr_formula: AttrFormula;
+}
+
+export class 属性预定义器 {
+    default_attr_formula: AttrFormula = undefined;
 
     注册(name: string, factory: type属性创建Factory) {
-        if(属性静态注册器.属性构造Map.has(name)) {
+        if(this.属性构造Map.has(name)) {
             throw new Error(`属性 ${name} 已存在`);
         }
-        属性静态注册器.属性构造Map.set(name, factory);
+        this.属性构造Map.set(name, factory);
     }
 
     获取(name: string): type属性创建Factory {
-        if(属性静态注册器.属性构造Map.has(name)) {
-            return 属性静态注册器.属性构造Map.get(name);
+        if(this.属性构造Map.has(name)) {
+            return this.属性构造Map.get(name);
         }
         throw new Error(`属性 ${name} 不存在`);
     }
 
-    创建(name: string, asc: ASC, base_value: number = undefined): Attribute {
+    创建(name: string, attr_mgr: IAttributeManager, base_value: number = undefined): Attribute {
         let 工厂 = this.获取(name);
         if(工厂 === undefined) {
             工厂 = {
@@ -59,32 +71,17 @@ export class 属性静态注册器 {
             }
         }
 
-        
-        let formula = 工厂.formula;
-        if(!formula && this.default_attr_formula_builder){
-            formula = this.default_attr_formula_builder(name);
-        }
+        let formula = 工厂.formula?? attr_mgr.default_attr_formula?? this.default_attr_formula;
 
-        const attr = new 工厂.attr_class(asc, name, base_value);
+        const attr = new 工厂.attr_class(attr_mgr, name, base_value);
         if(formula){
             attr.set_formula(formula);
-        }
-
-        if(attr.asc.unit instanceof Pawn){
-            if(工厂.pawn_max_attr_name){
-                const max_attr = attr.asc.get_attribute(工厂.pawn_max_attr_name);
-                attr.max_attr = max_attr;
-            }
-            if(工厂.pawn_min_attr_name){
-                const min_attr = attr.asc.get_attribute(工厂.pawn_min_attr_name);
-                attr.min_attr = min_attr;
-            }
         }
 
         return attr;
     }
 
-    static 属性构造Map: Map<string, type属性创建Factory> = new Map();
+    属性构造Map: Map<string, type属性创建Factory> = new Map();
     
 }
 
@@ -244,7 +241,7 @@ export class BaseAttribute{
 }
 
 export class Attribute extends BaseAttribute{
-    asc: ASC = undefined;
+    attr_mgr: IAttributeManager = undefined;
     protected _attr_operator_list?: AttrOperator[];
 
     name: string = undefined;
@@ -253,18 +250,14 @@ export class Attribute extends BaseAttribute{
     protected _cached_result: Readonly<AttrFomulaResult> = undefined;
     protected _final_value: number = undefined;
     protected _formula: AttrFormula = undefined;
-    protected _min_attr: BaseAttribute;
-    protected _max_attr: BaseAttribute;
 
 
-    constructor(asc: ASC, name: string, base_value?: number) {
+    constructor(attr_mgr: IAttributeManager, name: string, base_value?: number) {
         super(base_value);
         this.name = name;
-        this.asc = asc;
+        this.attr_mgr = attr_mgr;
         this._final_value = 0;
     }
-
-
 
     force_recalc_to_collect_sources(sources: AttrSourceCollection): void {
         this.do_refresh_value(sources);
@@ -290,8 +283,6 @@ export class Attribute extends BaseAttribute{
         }
         return this._cached_result;
     }
-
-    
 
     calc_modifier(source_collection?: AttrSourceCollection): AttrFomulaResult {
         let plus = this._base_value;
@@ -323,11 +314,11 @@ export class Attribute extends BaseAttribute{
     calc_inherit(source_collection?: AttrSourceCollection): AttrFomulaResult {
     
         const ret: AttrFomulaResult = [0, 0, 1];
-        const unit = this.asc.unit;
-        if(unit){
-            if(unit instanceof Pawn){
-                if(unit.player){
-                    const player_attr = unit.player.asc.get_attribute(this.name);
+        const attached_any = this.attr_mgr.attached_any;
+        if(attached_any){
+            if(attached_any instanceof Pawn){
+                if(attached_any.player){
+                    const player_attr = attached_any.player.asc.get_attribute(this.name);
                     if(player_attr instanceof Attribute){
                         const r = player_attr.cached_result();
                         ret[0] += r[0];
@@ -338,9 +329,9 @@ export class Attribute extends BaseAttribute{
                     }
                     this.subscribe_dirty_change(player_attr);
                 }
-            }else if(unit instanceof Player){
-                if(unit.team){
-                    const team_attr = unit.team.asc.get_attribute(this.name);
+            }else if(attached_any instanceof Player){
+                if(attached_any.team){
+                    const team_attr = attached_any.team.asc.get_attribute(this.name);
                     if(team_attr instanceof Attribute){
                         const r = team_attr.cached_result();
                         ret[0] += r[0];
@@ -351,9 +342,9 @@ export class Attribute extends BaseAttribute{
                     }
                     this.subscribe_dirty_change(team_attr);
                 }
-            }else if(unit instanceof Team){
-                if(unit.asc.world){
-                    const world_attr = unit.asc.world.asc.get_attribute(this.name);
+            }else if(attached_any instanceof Team){
+                if(attached_any.asc.world){
+                    const world_attr = attached_any.asc.world.asc.get_attribute(this.name);
                     if(world_attr instanceof Attribute){
                         const r = world_attr.cached_result();
                         ret[0] += r[0];
@@ -419,33 +410,7 @@ export class Attribute extends BaseAttribute{
         this._cached_result = r;
         this._final_value = (r[0]) * (1 + r[1]) * r[2];
 
-        if(this._max_attr !== undefined) {
-            this.subscribe_dirty_change(this._max_attr);
-            this._final_value = Math.min(this._final_value, this._max_attr.value());
-        }
-
-        if(this._min_attr !== undefined) {
-            this.subscribe_dirty_change(this._min_attr);
-            this._final_value = Math.max(this._final_value, this._min_attr.value());
-        }
-
         this._dirty = false;
-    }
-
-    get min_attr(): BaseAttribute {
-        return this._min_attr;
-    }
-    set min_attr(attr: BaseAttribute) {
-        this._min_attr = attr;
-        this.to_dirty(true);
-    }
-
-    get max_attr(): BaseAttribute {
-        return this._max_attr;
-    }
-    set max_attr(attr: BaseAttribute) {
-        this._max_attr = attr;
-        this.to_dirty(true);
     }
 
     use_attr_operator_immediately(attr_operator: AttrOperator): void {
