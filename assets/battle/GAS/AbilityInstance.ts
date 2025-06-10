@@ -3,19 +3,31 @@ import { ASC } from "./AbilitySystemComponent";
 import { AbilitySpec, AbilityTarget } from "./AbilitySpec";
 import { Effect } from "./Effect";
 import { FailedReasonContainer } from "./FailedReason";
+import { Unit, UnitInitData } from "./Unit";
 
 const { ccclass, property } = _decorator;
 
-export class AbilityInstance{
+export interface AbilityInstanceInitData extends UnitInitData {
+    caster: Unit;
+    target: AbilityTarget;
+    ability_spec: AbilitySpec;
+    to_check_effects?: Effect[];
+}
+
+export class AbilityInstance extends Unit{
     asc: ASC;
+    caster: Unit;  // ability_spec.caster和caster可能不是同一个
     target: AbilityTarget;
     ability_spec: AbilitySpec;
     to_check_effects: Effect[];
 
-    constructor(asc: ASC, ability_spec: AbilitySpec, target: AbilityTarget) {
-        this.asc = asc;
-        this.ability_spec = ability_spec;
-        this.target = target;
+    init(init_data: AbilityInstanceInitData) {
+        super.init(init_data);
+        this.asc = init_data.asc;
+        this.caster = init_data.caster;
+        this.target = init_data.target;
+        this.ability_spec = init_data.ability_spec;
+        this.to_check_effects = init_data.to_check_effects;
     }
     
     _active() {

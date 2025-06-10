@@ -1,6 +1,6 @@
 import { _decorator } from 'cc';
 import { Effect } from './Effect';
-import { Attribute, AttrFormula, BaseAttribute, IAttributeManager } from './属性';
+import { Attribute, AttrFormula, BaseAttribute, IAttributeManager, IAttributeHost } from './属性';
 import type { Unit, World} from './Unit';
 import { AbilitySpec } from './AbilitySpec';
 import { AbilityInstance } from './AbilityInstance';
@@ -92,25 +92,36 @@ export class TagManager {
     }
 }
 
+export interface ITagManager {
+    world: World;
+
+    owned_tags: Map<ITagName, number>;
+    blocked_other_tags: Map<ITagName, number>;
+
+    tag_ability_map: Map<ITagName, AbilityInstance[]>;
+    tag_effect_map: Map<ITagName, Effect[]>;
+}
  
-export class ASC implements IAttributeManager {
+export class ASC implements IAttributeManager, ITagManager {
     world: World = undefined;
     unit: Unit = undefined; // 每个ASC都必然有一个Unit
+
+    // ITagManager
     owned_tags: Map<ITagName, number> = new Map();
     blocked_other_tags: Map<ITagName, number> = new Map();
-
-    ability_spec_list: AbilitySpec[] = [];
 
     tag_ability_map: Map<ITagName, AbilityInstance[]> = new Map();
     tag_effect_map: Map<ITagName, Effect[]> = new Map();
 
-    running_ability_instance_list: AbilityInstance[] = [];
+
     
+    running_ability_instance_list: AbilityInstance[];
+    ability_spec_list: AbilitySpec[];
+    
+    // IAttributeManager
     属性Map: Map<string, BaseAttribute> = new Map();
-
     default_attr_formula: AttrFormula;
-
-    get attached_any(): any {
+    get attached_host(): IAttributeHost {
         return this.unit;
     }
 

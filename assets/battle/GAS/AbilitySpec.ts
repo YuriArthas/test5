@@ -2,9 +2,9 @@ import { AbilityInstance } from "./AbilityInstance";
 import { ASC, ITagName } from "./AbilitySystemComponent";
 import { Effect } from "./Effect";
 import { FailedReason, FailedReasonContainer, SimpleFailedReason } from "./FailedReason";
-import { Unit } from "./Unit";
+import { create_and_init, Unit, World } from "./Unit";
 import { Vec2 } from "cc";
-import { Attribute } from "./属性";
+import { AttrFormula, Attribute, BaseAttribute, IAttributeHost, IAttributeManager } from "./属性";
 
 type Point = Vec2;
 
@@ -19,20 +19,48 @@ export enum AbilityTargetType {
     NO_TARGET = 4,
 }
 
-export class AbilitySpec {
+export interface AbilitySpecInitData {
+    owner: Unit;
+    attribute_manager?: AbilitySpecAttributeManager;
+}
 
-    asc: ASC = undefined;
-    caster: Unit = undefined;
+export class AbilitySpecAttributeManager implements IAttributeManager {
+
+    get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T {
+        return this..get_attribute(name, create_if_not_exist);  // 这里需要实现
+    }
+
+    world: World = undefined;
+    attached_host: IAttributeHost = undefined;
+    属性Map: Map<string, BaseAttribute> = new Map();
+    default_attr_formula?: AttrFormula = undefined;
+}
+
+export class AbilitySpec implements IAttributeHost {
+    attribute_manager: AbilitySpecAttributeManager = undefined;
+    owner: Unit = undefined;
     running_ability_instance_list: AbilityInstance[] = [];
 
+    init(init_data: AbilitySpecInitData) {
+        if(init_data.attribute_manager) {
+            this.attribute_manager = init_data.attribute_manager;
+        } else {
+            this.attribute_manager = new AbilitySpecAttributeManager();
+            this.attribute_manager.world = init_data.owner.asc.world;
+            this.attribute_manager.attached_host = this;
+        }
+        
+        this.owner = init_data.owner;
+    }
+
     cast_range(): number {
-        const attr = this.asc.get_attribute<Attribute>("施法距离");
+        const attr = this.attribute_manager.get_attribute<Attribute>("施法距离");
         const cached_result = attr.cached_result();
         return Attribute.calc_final_value(attr.base_value, cached_result);
     }
 
-    constructor(asc: ASC) {
-        this.asc = asc;
+    get attribute_manager_inherit(): IAttributeHost {
+        return this.owner;
     }
 
     target_type(): number {
@@ -46,8 +74,13 @@ export class AbilitySpec {
         }
 
         const ability_instance_class = this.ability_instance_class();
-        let ability_instance = new ability_instance_class(this.asc, this, target);
-        ability_instance.to_check_effects = to_check_effects;
+        let ability_instance = create_and_init(ability_instance_class, {
+            world: this.owner.asc.world,
+            caster: this.owner,
+            target: target,
+            ability_spec: this,
+            to_check_effects: to_check_effects,
+        });
 
         ability_instance._active();
 
@@ -86,7 +119,7 @@ export class AbilitySpec {
         const required_tags = this.required_tags();
         if(required_tags) {
             for(let tag of required_tags) {
-                if(!this.asc.owned_tags.has(tag)) {
+                if(!this.owner.asc.owned_tags.has(tag)) {
                     if (reason) {
                         reason.value = new SimpleFailedReason("Required tag not found: " + tag);
                     }
@@ -98,7 +131,7 @@ export class AbilitySpec {
         const blocked_tags = this.blocked_tags();
         if(blocked_tags) {
             for(let tag of blocked_tags) {
-                if(this.asc.owned_tags.has(tag)) {
+                if(this.owner.asc.owned_tags.has(tag)) {
                     if (reason) {
                         reason.value = new SimpleFailedReason("Blocked tag found: " + tag);
                     }

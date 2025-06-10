@@ -6,7 +6,7 @@ import { Attribute, AttrFomulaResult, AttrSourceCollection, BaseAttribute } from
 import resourceManager from './ResourceManager';
 import { 牌, 牌可拖到Layer, 牌状态 } from './牌';
 import { ASC } from './GAS/AbilitySystemComponent';
-import { World, Player, Team, Pawn, UnitInitData, create_unit } from './GAS/Unit';
+import { World, Player, Team, Pawn, UnitInitData, create_and_init } from './GAS/Unit';
 import { 可被拖到Component } from './可被拖到Component';
 import { DragEndBehavior, 可拖动Component } from './可拖动Component';
 import { BaseCharacter, BaseCharacterInitData } from './pawns/BaseCharacter';
@@ -76,7 +76,7 @@ export class battle extends Component {
         // const 牌数据Map = 静态配置.instance.牌数据Map;
         // await resourceManager.loadAll<Prefab>(Array.from(牌数据Map.values()).map(card => card.prefab));
 
-        this.world = create_unit(BattleWorld, {world: undefined, node: this.node});
+        this.world = create_and_init(BattleWorld, {world: undefined, node: this.node});
         this.world.battle = this;
 
         console.log("loadAll finished");
@@ -305,7 +305,7 @@ export class battle extends Component {
         heroUnit.setParent(hero_position.parent);
         heroUnit.setPosition(hero_position.position);
 
-        const hero = create_unit(hero_config.pawn_class, {
+        const hero = create_and_init(hero_config.pawn_class, {
             world: this.world,
             node: heroUnit,
             player: this.world.player_0,
@@ -365,16 +365,16 @@ export class BattleWorld extends World {
         super.init(init_data);
         this.init_attr_register();
 
-        this.team_0 = create_unit(Team, {world: this, team_id: 0});
+        this.team_0 = create_and_init(Team, {world: this, team_id: 0});
         this.team_0.node.setParent(this.node);
 
-        this.team_1 = create_unit(Team, {world: this, team_id: 1});
+        this.team_1 = create_and_init(Team, {world: this, team_id: 1});
         this.team_1.node.setParent(this.node);
 
-        this.player_0 = create_unit(Player, {world: this, team: this.team_0});
+        this.player_0 = create_and_init(Player, {world: this, team: this.team_0});
         this.player_0.node.setParent(this.node);
 
-        this.player_1 = create_unit(Player, {world: this, team: this.team_1});
+        this.player_1 = create_and_init(Player, {world: this, team: this.team_1});
         this.player_1.node.setParent(this.node);
 
 
@@ -392,7 +392,7 @@ export class BattleWorld extends World {
 
         this.属性预定义器.注册("骰子最大数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最大值});
 
-        this.属性预定义器.注册("生命", {attr_class: Attribute, base_value: 1, pawn_max_attr_name: "生命最大值"});
+        this.属性预定义器.注册("生命", {attr_class: Attribute, base_value: 1});
 
         this.属性预定义器.注册("生命最大值", {attr_class: Attribute, base_value: 1});
 

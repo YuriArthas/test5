@@ -15,27 +15,24 @@ export class AttrOperator {
 
 export type AttrOperatorType = "add" | "add_mul" | "set" | "mul_mul" ;
 
-export type type属性构造函数 = new (attr_mgr: IAttributeManager, name: string, base_value?: number) => Attribute;
+export type type属性构造函数 = typeof Attribute;
 export type type属性创建Factory = {
     attr_class?: type属性构造函数;
     base_value?: number;
     formula?: AttrFormula;
-
-    pawn_max_attr_name?: string;
-    pawn_min_attr_name?: string;
 }
 
-export interface IAttributeAttachable {
+export interface IAttributeHost {
     attribute_manager: IAttributeManager;
-    attribute_manager_inherit?: IAttributeAttachable;
+    attribute_manager_inherit?: IAttributeHost;
 }
 
 export interface IAttributeManager {
     get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T;
     world: World;
-    attached_any: any;
+    attached_host: IAttributeHost;
     属性Map: Map<string, BaseAttribute>;
-    default_attr_formula: AttrFormula;
+    default_attr_formula?: AttrFormula;
 }
 
 export class 属性预定义器 {
@@ -314,7 +311,7 @@ export class Attribute extends BaseAttribute{
     calc_inherit(source_collection?: AttrSourceCollection): AttrFomulaResult {
     
         const ret: AttrFomulaResult = [0, 0, 1];
-        const attached_any = this.attr_mgr.attached_any;
+        const attached_any = this.attr_mgr.attached_host;
         if(attached_any){
             if(attached_any instanceof Pawn){
                 if(attached_any.player){

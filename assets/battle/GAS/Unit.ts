@@ -3,12 +3,13 @@ import { _decorator, assert, Component } from "cc";
 import { Node } from "cc";
  
 import { 可被拖到Component } from "../可被拖到Component";
-import { 属性预定义器 } from "./属性";
+import { IAttributeHost, IAttributeManager, 属性预定义器 } from "./属性";
 const { ccclass, property} = _decorator;
 
 export interface UnitInitData {
     world: World;
     node?: Node;
+    asc?: ASC;
 }
 
 export interface PlayerInitData extends UnitInitData {
@@ -29,14 +30,17 @@ export class GAS_BaseComponent extends Component {
 }
 
 @ccclass('Unit')
-export class Unit extends GAS_BaseComponent {
+export class Unit extends GAS_BaseComponent implements IAttributeHost {
     static InitDataType: new ()=> UnitInitData = undefined;
-    
+    get attribute_manager(): IAttributeManager {
+        return this.asc;
+    }
     asc: ASC = undefined;  // 每个Unit都必然有ASC
     id: number = undefined;
 
+
     init(init_data: UnitInitData) {
-        const asc = new ASC();
+        const asc = init_data.asc?? new ASC();
         this.asc = asc;
         asc.unit = this;
         asc.world = init_data.world;
@@ -80,6 +84,10 @@ export class Team extends Unit {
         super.init(init_data);
         this.team_id = init_data.team_id;
     }
+
+    get attribute_manager_inherit(): IAttributeHost {
+        return this.asc.world;
+    }
 }
 
 export class Player extends Unit {
@@ -91,6 +99,10 @@ export class Player extends Unit {
         super.init(init_data);
         this.team = init_data.team;
     }
+
+    get attribute_manager_inherit(): IAttributeHost {
+        return this.team;
+    }
 }
 
 export class Pawn extends Unit {
@@ -98,17 +110,21 @@ export class Pawn extends Unit {
     
     player: Player = undefined;
 
+    get attribute_manager_inherit(): IAttributeHost {
+        return this.player;
+    }
+
     init(init_data: PawnInitData) {
         super.init(init_data);
         this.player = init_data.player;
     }
 }
 
-type ExtractInitDataType<T> = T extends { InitDataType: new () => infer U } ? U : never;
+type ExtractInitDataType<T> = T extends { prototype: { init(data: infer U): void } } ? U : never;
 
 // 创建一个Unit, 并返回它, 脚本总是这样创建Unit
-export function create_unit<P extends typeof Unit>(UnitClassType: P, init_data: ExtractInitDataType<P>): InstanceType<P> {
-    const unitNode = init_data.node?? new Node();
+export function create_and_init<P extends { new (): { init(data: any): void } }>(UnitClassType: P, init_data: ExtractInitDataType<P>): InstanceType<P> {
+    const unitNode = (init_data as any).node?? new Node();
     const unit = unitNode.addComponent(UnitClassType);
     unit.init(init_data);
     return unit as InstanceType<P>;
