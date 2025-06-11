@@ -23,8 +23,8 @@ export type type属性创建Factory = {
 }
 
 export interface IAttributeHost {
-    attribute_manager: IAttributeManager;
-    attribute_manager_inherit?: IAttributeHost;
+    get_attribute_manager(): IAttributeManager;
+    get_attribute_manager_inherit(): IAttributeHost;
 }
 
 export interface IAttributeManager {
@@ -32,7 +32,6 @@ export interface IAttributeManager {
     world: World;
     attached_host: IAttributeHost;
     属性Map: Map<string, BaseAttribute>;
-    default_attr_formula?: AttrFormula;
 }
 
 export class 属性预定义器 {
@@ -68,7 +67,7 @@ export class 属性预定义器 {
             }
         }
 
-        let formula = 工厂.formula?? attr_mgr.default_attr_formula?? this.default_attr_formula;
+        let formula = 工厂.formula?? this.default_attr_formula;
 
         const attr = new 工厂.attr_class(attr_mgr, name, base_value);
         if(formula){
@@ -128,7 +127,7 @@ export class BaseAttribute{
         if(attr._dirty_subscriber_array) {
             for(let elem of attr._dirty_subscriber_array) {
                 if(elem._dirty == false) {
-                    Attribute._dirty_and_collect(list, elem);
+                    BaseAttribute._dirty_and_collect(list, elem);
                 }
             }
         }
@@ -385,8 +384,8 @@ export class Attribute extends BaseAttribute{
         return this._base_mul_mul;
     }
 
-    static calc_final_value(value: number, cached_result: Readonly<AttrFomulaResult>): number {
-        return (value + cached_result[0]) * (1 + cached_result[1]) * cached_result[2];
+    static calc_final_value(cached_result: Readonly<AttrFomulaResult>): number {
+        return cached_result[0] * (1 + cached_result[1]) * cached_result[2];
     }
 
     do_refresh_value(source_collection?: AttrSourceCollection) {

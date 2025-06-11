@@ -47,7 +47,7 @@ export class AbilityInstance extends Unit{
 
     protected _clean_ability() {
         for(let effect of this.to_check_effects) {
-            if(effect.durationType != "immediately" && effect.attached){
+            if(effect.durationType != "immediately" && effect.has_attached){
                 effect.detach();
             }
         }

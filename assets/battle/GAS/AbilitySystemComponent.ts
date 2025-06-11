@@ -1,7 +1,8 @@
 import { _decorator } from 'cc';
 import { Effect } from './Effect';
 import { Attribute, AttrFormula, BaseAttribute, IAttributeManager, IAttributeHost } from './属性';
-import type { Unit, World} from './Unit';
+import type { Unit} from './Unit';
+import type { World } from './World';
 import { AbilitySpec } from './AbilitySpec';
 import { AbilityInstance } from './AbilityInstance';
 const { ccclass, property } = _decorator;
@@ -120,7 +121,6 @@ export class ASC implements IAttributeManager, ITagManager {
     
     // IAttributeManager
     属性Map: Map<string, BaseAttribute> = new Map();
-    default_attr_formula: AttrFormula;
     get attached_host(): IAttributeHost {
         return this.unit;
     }
@@ -129,9 +129,6 @@ export class ASC implements IAttributeManager, ITagManager {
         let attr = this.属性Map.get(name);
         if(!attr && create_if_not_exist) {
             attr = this.world.属性预定义器.创建(name, this);
-            if(this.default_attr_formula && attr instanceof Attribute){
-                attr.set_formula(this.default_attr_formula);
-            }
             this.属性Map.set(name, attr);
         }
 

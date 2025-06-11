@@ -49,33 +49,61 @@ export class AttrModifier {
 export type EffectDurationType = "immediately" | "duration" | "manual" | "infinite";
 export const EmptyTagList: Readonly<ITagName[]> = [];
 
-export class Effect {
+export interface EffectInitData {
+    asc: ASC;
+    effect_tags: ITagName[];
     durationType: EffectDurationType;
+    duration?: number;
+    modifier_list?: AttrModifier[];
+    required_tags?: ITagName[];
+    blocked_tags?: ITagName[];
+    remove_other_tags?: ITagName[];
+    block_other_tags?: ITagName[];
+    on_attach?: () => void;
+    on_detach?: () => void;
+}
+
+export class Effect {
+    durationType: EffectDurationType = undefined;
     duration: number;
-    asc: ASC;  // Effect总归会绑定一个GAS
+    asc: ASC = undefined;  // Effect总归会绑定一个GAS
 
     modifier_list: AttrModifier[];
     // tag_modifier_list: TagModifier[];  // 总是更改自身的GAS的tag
 
     _effect_tags: ITagName[] = undefined;
-    _required_tags: ITagName[] = undefined;
-    _blocked_tags: ITagName[] = undefined;
-    _remove_other_tags: ITagName[] = undefined;
-    _block_other_tags: ITagName[] = undefined;
-    _attached: boolean = false;
+    _required_tags: ITagName[];
+    _blocked_tags: ITagName[];
+    _remove_other_tags: ITagName[];
+    _block_other_tags: ITagName[];
+    _has_attached: boolean = false;
 
-    constructor(asc: ASC, effect_tags: ITagName[], durationType: EffectDurationType, duration: number, modifier_list?: AttrModifier[]) {
-        this.asc = asc;
-        this._effect_tags = effect_tags;
-        this.durationType = durationType;
-        this.duration = duration;
-        if(modifier_list) {
-            this.modifier_list = modifier_list;
+    init(init_data: EffectInitData){
+        this.asc = init_data.asc;
+        this._effect_tags = init_data.effect_tags;
+        this.durationType = init_data.durationType;
+        this.duration = init_data.duration?? 0;
+        if(init_data.modifier_list) {
+            this.modifier_list = init_data.modifier_list;
         }
-    }
-
-    set effectTags(tags: ITagName[]) {
-        this._effect_tags = tags;
+        if(init_data.required_tags) {
+            this._required_tags = init_data.required_tags;
+        }
+        if(init_data.blocked_tags) {
+            this._blocked_tags = init_data.blocked_tags;
+        }
+        if(init_data.remove_other_tags) {
+            this._remove_other_tags = init_data.remove_other_tags;
+        }
+        if(init_data.block_other_tags) {
+            this._block_other_tags = init_data.block_other_tags;
+        }
+        if(init_data.on_attach) {
+            this.on_attach = init_data.on_attach;
+        }
+        if(init_data.on_detach) {
+            this.on_detach = init_data.on_detach;
+        }
     }
 
     // 当前effect的tag
@@ -83,17 +111,9 @@ export class Effect {
         return this._effect_tags;
     }
 
-    set requiredTags(tags: ITagName[]) {
-        this._required_tags = tags;
-    }
-
     // 如果目标身上没有这些 Tag，GE 将不会应用
     get requiredTags(): Readonly<ITagName[]> {
         return this._required_tags?? EmptyTagList;
-    }
-
-    set grantTags(tags: ITagName[]) {
-        this._effect_tags = tags;
     }
 
     // 应用当前 GE 时，自动添加这些 Tag
@@ -101,26 +121,14 @@ export class Effect {
         return this._effect_tags?? EmptyTagList;
     }
 
-    set blockedTags(tags: ITagName[]) {
-        this._blocked_tags = tags;
-    }
-
     // 如果目标拥有这些 Tag，GE 将不会应用
     get blockedTags(): Readonly<ITagName[]> {
         return this._blocked_tags?? EmptyTagList;
     }
 
-    set removeOtherTags(tags: ITagName[]) {
-        this._remove_other_tags = tags;
-    }
-
     // 应用当前 GE 时，自动移除目标身上具有这些 Tag 的 GE
     get removeOtherTags(): Readonly<ITagName[]> {
         return this._remove_other_tags?? EmptyTagList;
-    }
-
-    set blockOtherTags(tags: ITagName[]) {
-        this._block_other_tags = tags;
     }
 
     // 使目标免疫具有这些 Tag 的 GE 应用
@@ -185,12 +193,12 @@ export class Effect {
         return true;
     }
 
-    get attached(): boolean {
-        return this._attached;
+    get has_attached(): boolean {
+        return this._has_attached;
     }
 
     attach(): void {
-        assert(!this._attached, "attach: Effect已经attached");
+        assert(!this._has_attached, "attach: Effect已经attached");
         if(this.durationType != "immediately") {
             for(let tag of this.effectTags){
                 let effect_list = this.asc.tag_effect_map.get(tag);
@@ -263,7 +271,7 @@ export class Effect {
             ability.cancel_ability();
         }
 
-        this._attached = true;
+        this._has_attached = true;
         this.on_attach();
     }
 
@@ -272,7 +280,7 @@ export class Effect {
     }
 
     detach(): void {
-        assert(this._attached, "detach: Effect未attached");
+        assert(this._has_attached, "detach: Effect未attached");
         assert(this.durationType != "immediately", "detach: 立即生效的Effect不能被detach");
         for(let tag of this.effectTags) {
             let effect_list = this.asc.tag_effect_map.get(tag);
@@ -287,7 +295,7 @@ export class Effect {
             modifier.attached_attr.remove_attr_operator(modifier.attr_operator);
         }
 
-        this._attached = false;
+        this._has_attached = false;
         this.on_detach();
     }
 

@@ -1,4 +1,4 @@
-import { _decorator, assert, assetManager, Button, CCInteger, Component, instantiate, Node, Prefab, UITransform, Vec3 } from 'cc';
+import { _decorator, assert, assetManager, Button, CCInteger, Component, instantiate, Node, Prefab, UITransform, Vec2, Vec3 } from 'cc';
 import { 局数据 } from './存档';
 import { 牌数据 } from './牌数据';
 import { 静态配置 } from '../静态配置';
@@ -6,11 +6,38 @@ import { Attribute, AttrFomulaResult, AttrSourceCollection, BaseAttribute } from
 import resourceManager from './ResourceManager';
 import { 牌, 牌可拖到Layer, 牌状态 } from './牌';
 import { ASC } from './GAS/AbilitySystemComponent';
-import { World, Player, Team, Pawn, UnitInitData, create_and_init } from './GAS/Unit';
+import { Player, Team, Pawn, UnitInitData, create_and_init, Unit } from './GAS/Unit';
+import { World } from './GAS/World';
 import { 可被拖到Component } from './可被拖到Component';
 import { DragEndBehavior, 可拖动Component } from './可拖动Component';
 import { BaseCharacter, BaseCharacterInitData } from './pawns/BaseCharacter';
 const { ccclass, property } = _decorator;
+
+export class AbilityTarget {
+    target: Unit|Vec2|undefined|any = undefined;
+}
+
+export enum AbilityTargetType {
+    NONE = 0,
+    Unit = 1,
+    Point = 2,
+    NO_TARGET = 4,
+}
+
+export enum AbilitySpecAttrEnum {
+    最大施法距离 = "最大施法距离",
+    冷却时间 = "冷却时间",
+}
+
+export enum AttrEnum {
+    最大施法距离 = AbilitySpecAttrEnum.最大施法距离,
+    冷却时间 = AbilitySpecAttrEnum.冷却时间,
+    生命 = "生命",
+    生命最大值 = "生命最大值",
+    骰子最小数量 = "骰子最小数量",
+    骰子最大数量 = "骰子最大数量",
+
+}
 
 
 class BattleInitData {
@@ -348,6 +375,10 @@ export class battle extends Component {
 
 export class BattleWorld extends World {
     battle: battle = undefined;
+
+    dragable_layer_map: Map<number, 可被拖到Component[]> = new Map();
+
+    node_maps: Map<number, Node> = new Map();
     
     public team_0: Team = undefined;
 
@@ -377,25 +408,33 @@ export class BattleWorld extends World {
         this.player_1 = create_and_init(Player, {world: this, team: this.team_1});
         this.player_1.node.setParent(this.node);
 
-
         this.player_0.asc.属性Map.set("骰子最小数量", this.属性预定义器.创建("骰子最小数量", this.player_0.asc));
         this.player_0.asc.属性Map.set("骰子最大数量", this.属性预定义器.创建("骰子最大数量", this.player_0.asc));
 
-        
     }
 
     
 
     init_attr_register(){
 
-        this.属性预定义器.注册("骰子最小数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最小值});
+        
 
-        this.属性预定义器.注册("骰子最大数量", {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最大值});
+        this.属性预定义器.注册(AttrEnum.骰子最小数量, {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最小值});
 
-        this.属性预定义器.注册("生命", {attr_class: Attribute, base_value: 1});
+        this.属性预定义器.注册(AttrEnum.骰子最大数量, {attr_class: Attribute, base_value: 静态配置.instance.骰子个数基础最大值});
 
-        this.属性预定义器.注册("生命最大值", {attr_class: Attribute, base_value: 1});
+        this.属性预定义器.注册(AttrEnum.生命, {attr_class: Attribute, base_value: 1});
+
+        this.属性预定义器.注册(AttrEnum.生命最大值, {attr_class: Attribute, base_value: 1});
+
+        this.属性预定义器.注册(AttrEnum.最大施法距离, {attr_class: Attribute, base_value: 20});
+
+        this.属性预定义器.注册(AttrEnum.冷却时间, {attr_class: Attribute, base_value: 0});
+
+
 
         
     }
+
+    
 }
