@@ -377,8 +377,6 @@ export class BattleWorld extends World {
     battle: battle = undefined;
 
     dragable_layer_map: Map<number, 可被拖到Component[]> = new Map();
-
-    node_maps: Map<number, Node> = new Map();
     
     public team_0: Team = undefined;
 
