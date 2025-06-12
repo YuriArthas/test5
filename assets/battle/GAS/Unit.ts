@@ -91,7 +91,6 @@ export class GAS_Component {
     }
 }
 
-@ccclass('Unit')
 export class Unit extends GAS_Node implements IAttributeHost {
     static InitDataType: new ()=> UnitInitData = undefined;
 

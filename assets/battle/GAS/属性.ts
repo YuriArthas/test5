@@ -1,6 +1,6 @@
 import { assert } from "cc";
-import { Pawn, Player, Team, World } from "./Unit";
-
+import { Pawn, Player, Team} from "./Unit";
+import { World } from "./World";
 
 export class AttrOperator {
     value: BaseAttribute;
