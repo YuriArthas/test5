@@ -66,7 +66,54 @@ export class GAS_Node {
         this.components.push(component);
         component.init(init_data);
         
+        if (this._hasLoaded) {
+            component.onLoad();
+        }
+        
+        if (this._hasStarted) {
+            component.start();
+        }
+
+        if (this.isActiveInHierarchy()) {
+            component.onEnable(); 
+        }
+
         return component;
+    }
+
+    get_component<T extends GAS_Component>(ComponentType: new () => T): T | undefined {
+        for (const component of this.components) {
+            if (component instanceof ComponentType) {
+                return component as T;
+            }
+        }
+        return undefined;
+    }
+
+    get_components<T extends GAS_Component>(ComponentType: new () => T): T[] {
+        return this.components.filter(c => c instanceof ComponentType) as T[];
+    }
+
+    get_component_in_children<T extends GAS_Component>(ComponentType: new () => T): T | undefined {
+        for (const child of this.children) {
+            const component = child.get_component(ComponentType);
+            if (component) {
+                return component;
+            }
+            const componentInChildren = child.get_component_in_children(ComponentType);
+            if (componentInChildren) {
+                return componentInChildren;
+            }
+        }
+        return undefined;
+    }
+
+    remove_component(component: GAS_Component) {
+        const index = this.components.indexOf(component);
+        if (index !== -1) {
+            this.components.splice(index, 1);
+            component.onDestroy();
+        }
     }
 
     add_child(child: GAS_Node) {
@@ -208,6 +255,13 @@ export class GAS_Node {
             component.onDestroy();
         }
     }
+
+    destroy_all_components() {
+        const componentsToDestroy = [...this.components];
+        for (const component of componentsToDestroy) {
+            this.remove_component(component);
+        }
+    }
 }
 
 export interface GAS_ComponentInitData {
@@ -216,33 +270,103 @@ export interface GAS_ComponentInitData {
 
 export class GAS_Component {
     owner: GAS_Node = undefined;
+    private _enabled: boolean = true;
+    private _hasLoaded: boolean = false;
+    private _hasStarted: boolean = false;
 
     init(init_data: GAS_ComponentInitData) {
         this.owner = init_data.owner;
+        this.onInit();
+    }
+
+    protected onInit() {
+        
     }
 
     onLoad() {
+        if (this._hasLoaded) return;
+        this._hasLoaded = true;
+        this.onLoadImpl();
+    }
+
+    protected onLoadImpl() {
         
     }
 
     start() {
+        if (this._hasStarted) return;
+        this._hasStarted = true;
+        this.onStartImpl();
+    }
+
+    protected onStartImpl() {
         
     }
 
     update(deltaTime: number) {
+        if (!this._enabled || !this.owner?.isActiveInHierarchy()) return;
+        this.onUpdateImpl(deltaTime);
+    }
+
+    protected onUpdateImpl(deltaTime: number) {
         
     }
 
     onEnable() {
+        if (!this._enabled) {
+            this._enabled = true;
+            this.onEnableImpl();
+        }
+    }
+
+    protected onEnableImpl() {
         
     }
 
     onDisable() {
+        if (this._enabled) {
+            this._enabled = false;
+            this.onDisableImpl();
+        }
+    }
+
+    protected onDisableImpl() {
         
     }
 
     onDestroy() {
+        this.onDestroyImpl();
+        this.owner = undefined;
+    }
 
+    protected onDestroyImpl() {
+
+    }
+
+    get enabled(): boolean {
+        return this._enabled;
+    }
+
+    set enabled(value: boolean) {
+        if (this._enabled === value) return;
+        
+        if (value) {
+            this.onEnable();
+        } else {
+            this.onDisable();
+        }
+    }
+
+    get world(): World {
+        return this.owner?.world;
+    }
+
+    get hasLoaded(): boolean {
+        return this._hasLoaded;
+    }
+
+    get hasStarted(): boolean {
+        return this._hasStarted;
     }
 }
 
