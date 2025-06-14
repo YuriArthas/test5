@@ -1,7 +1,7 @@
 import { assert } from "cc";
 import { GAS_Component, GAS_ComponentInitData, GAS_Node, Player, Unit, UnitInitData } from "./Unit";
 import { 属性预定义器 } from "./属性";
-import { GAS_PropertyChangedEvent, GAS_SyncEventType, GASStateful } from "./State";
+import { GAS_PropertyChangedEvent, GAS_Ref, GAS_SyncEventType, IGAS_Ref } from "./State";
 
 export enum WorldRole {
     Server,
@@ -19,8 +19,8 @@ export class World extends Unit {
 
     属性预定义器: 属性预定义器 = new 属性预定义器();
 
-    id_state_maps: Map<number, GASStateful> = new Map();
-    state_id_maps: Map<GASStateful, number> = new Map();
+    id_state_maps: Map<number, IGAS_Ref> = new Map();
+    state_id_maps: Map<IGAS_Ref, number> = new Map();
 
     // 一秒跑30物理帧, 每物理帧跑33逻辑帧
     // 理论上每次物理帧结束才会发消息给客户端, 所以一次会带33个逻辑帧的消息
@@ -39,18 +39,26 @@ export class World extends Unit {
         this.role = init_data.role;
     }
 
-    add_id_state(id: number, state: GASStateful, send_sync_event: boolean = true) {
-        this.id_state_maps.set(id, state);
-        this.state_id_maps.set(state, id);
+    is_ref_valid(ref: IGAS_Ref): boolean {
+        return this.id_state_maps.get(ref.gas_id) === ref;
+    }
+
+    add_id_state(state: IGAS_Ref, send_sync_event: boolean = true) {
+        if(state.gas_id === undefined) {
+            state.gas_id = this.apply_id();
+        }
+        this.id_state_maps.set(state.gas_id, state);
+        this.state_id_maps.set(state, state.gas_id);
         if(send_sync_event) {
             this.syncer.on_self_state_changed({
                 type: GAS_SyncEventType.CreateState,
                 target: state,
-                propertyName: id,
-                newValue: state,
-                
             });
         }
+    }
+
+    apply_id() {
+        return ++this.id_counter;
     }
 
     update(){
