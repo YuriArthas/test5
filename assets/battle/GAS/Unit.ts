@@ -4,6 +4,7 @@ import { Node } from "cc";
 import { World } from "./World";
 import { 可被拖到Component } from "../可被拖到Component";
 import { IAttributeHost, IAttributeManager, 属性预定义器 } from "./属性";
+import { GAS_State } from "./State";
 const { ccclass, property} = _decorator;
 
 type ExtractInitDataType<T> = T extends { prototype: { init(data: infer U): void } } ? U : never;
@@ -42,21 +43,22 @@ export interface ILinkedComponent {
 
 }
 
+@GAS_State
 export class GAS_Node {
     world: World = undefined;
     components: GAS_Component[] = [];
     parent: GAS_Node = undefined;
     children: GAS_Node[] = [];
-    id: number = undefined;
+    gas_id: number = undefined;
     active: boolean = true;
     private _activeInHierarchy: boolean = false;
     private _hasLoaded: boolean = false;
     private _hasStarted: boolean = false;
 
     init(init_data: GAS_NodeInitData) {
-        this.id = ++init_data.world.id_counter;
-        init_data.world.id_node_maps.set(this.id, this);
-        init_data.world.node_id_maps.set(this, this.id);
+        this.gas_id = ++init_data.world.id_counter;
+        init_data.world.id_state_maps.set(this.gas_id, this);
+        init_data.world.node_id_maps.set(this, this.gas_id);
         this.world = init_data.world;
         this._updateActiveInHierarchy();
     }
@@ -246,7 +248,7 @@ export class GAS_Node {
 
         // Unregister from world.
         if (this.world) {
-            this.world.id_node_maps.delete(this.id);
+            this.world.id_state_maps.delete(this.gas_id);
             this.world.node_id_maps.delete(this);
         }
 
@@ -268,14 +270,17 @@ export interface GAS_ComponentInitData {
     owner: GAS_Node;
 }
 
+@GAS_State
 export class GAS_Component {
     owner: GAS_Node = undefined;
+    gas_id: number = undefined;
     private _enabled: boolean = true;
     private _hasLoaded: boolean = false;
     private _hasStarted: boolean = false;
 
     init(init_data: GAS_ComponentInitData) {
         this.owner = init_data.owner;
+        this.gas_id = ++init_data.owner.world.id_counter;
         this.onInit();
     }
 
@@ -357,16 +362,16 @@ export class GAS_Component {
         }
     }
 
-    get world(): World {
-        return this.owner?.world;
-    }
-
     get hasLoaded(): boolean {
         return this._hasLoaded;
     }
 
     get hasStarted(): boolean {
         return this._hasStarted;
+    }
+
+    get world(): World {
+        return this.owner.world;
     }
 }
 
@@ -392,7 +397,9 @@ export class Unit extends GAS_Node implements IAttributeHost {
         asc.world = this.world;
     }
 
-    
+    get_world(): World {
+        return this.world;
+    }
 }
 
 
