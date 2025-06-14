@@ -4,26 +4,23 @@ export interface IGAS_Ref {
     world: World;
     gas_id: number;
     get valid(): boolean;
-}
-
-/**
- * GAS类的静态属性接口
- */
-export interface GASClassStatic {
-    __gas_property_names__?: string[];
-    __gas_property_metadata__?: Map<string, GAS_Property_Meta>;
-    __gas_ordered_properties__?: { propName: string; meta: GAS_Property_Meta }[];
     
-    getGASProperties?(): { propName: string; meta: GAS_Property_Meta }[];
-    getGASPropertyMetadata?(): Map<string, GAS_Property_Meta>;
-    getGASPropertyNames?(): string[];
-    isGASClass?(): boolean;
+    /**
+     * 类元数据访问器 (只有被@GAS_State装饰的类才有)
+     */
+    readonly CLASS_META?: {
+        readonly gas_property_names: string[];
+        readonly gas_property_metadata: Map<string, GAS_Property_Meta>;
+        readonly gas_ordered_properties: { propName: string; meta: GAS_Property_Meta }[];
+        
+        getProperty(name: string): Readonly<GAS_Property_Meta> | undefined;
+        hasProperty(name: string): boolean;
+        readonly propertyCount: number;
+        readonly isGASClass: boolean;
+    };
 }
 
-/**
- * GAS类的构造函数类型
- */
-export type GASConstructor = (new (...args: any[]) => IGAS_Ref) & GASClassStatic;
+
 
 export class GAS_Ref implements IGAS_Ref {
     world: World;
@@ -165,12 +162,8 @@ class GAS_Array<T> extends Array<T> implements IGAS_Ref {
  * type: 属性的构造函数，可以是类，也可以是Number, String等原生类型。
  */
 export interface GAS_Property_Meta {
-    type: 
-        IGAS_Ref |
-        Number | String | Boolean |
-        GAS_Map<string, GAS_Property_Meta> | GAS_Map<number, GAS_Property_Meta> |
-        GAS_Set<GAS_Property_Meta> |
-        GAS_Array<GAS_Property_Meta>;
+    type: IGAS_Ref | Number | String | Boolean;
+    name: string;
 }
 
 export enum GAS_SyncEventType {
@@ -182,8 +175,8 @@ export enum GAS_SyncEventType {
     RemoveState,
 
     FULL_SYNC,
+    CLEAR,
 
-    
     LogicFrameEnd,
     SyncFrameEnd,
 }
@@ -208,32 +201,14 @@ export interface GAS_PropertyChangedEvent extends GAS_SyncEvent {
     propertyName?: string|number;
     op?: GAS_PropertyChangedEventOperatorType;  // 操作类型，默认为SET
     newValue?: any;
-    meta?: GAS_Property_Meta;
+    property_meta?: GAS_Property_Meta;
 }
-
-
-
-/**
- * 临时存储每个类在定义时拥有的GAS属性名。
- */
-export const rawGasProperties = new Map<any, string[]>();
-
-/**
- * 临时存储每个类在定义时拥有的GAS属性元数据。
- */
-export const gasPropertyMetadata = new Map<any, Map<string, any>>();
-
-/**
- * 最终存储每个@GAS_State类预收集、排序好的属性列表。
- * 结构为: { propName: string; meta: any }[]
- */
-export const preCollectedGasProperties = new Map<any, { propName: string; meta: GAS_Property_Meta }[]>();
 
 /**
  * @GAS_Property 装饰器工厂
- * @param meta 元数据对象, 必须包含type字段, e.g., { type: Unit }
+ * @param property_meta 元数据对象, 必须包含type字段, e.g., { type: Unit }
  */
-export function GAS_Property<T extends IGAS_Ref>(meta: GAS_Property_Meta): (target: T, propertyName: string) => void {
+export function GAS_Property<T extends IGAS_Ref>(property_meta: GAS_Property_Meta): (target: T, propertyName: string) => void {
     return function (prototype: any, propertyName: string) {
         const constructor = prototype.constructor;
         
@@ -249,7 +224,7 @@ export function GAS_Property<T extends IGAS_Ref>(meta: GAS_Property_Meta): (targ
         if (!constructor.__gas_property_metadata__) {
             constructor.__gas_property_metadata__ = new Map<string, GAS_Property_Meta>();
         }
-        constructor.__gas_property_metadata__.set(propertyName, meta);
+        constructor.__gas_property_metadata__.set(propertyName, property_meta);
 
         const privateKey = `_${propertyName}`;
     
@@ -269,7 +244,7 @@ export function GAS_Property<T extends IGAS_Ref>(meta: GAS_Property_Meta): (targ
                             target: this,
                             propertyName,
                             newValue,
-                            meta
+                            property_meta: property_meta
                         });
                     }
                 }
@@ -280,12 +255,10 @@ export function GAS_Property<T extends IGAS_Ref>(meta: GAS_Property_Meta): (targ
     }
 }
 
-
-
 /**
  * @GAS_State 装饰器
  */
-export function GAS_State<T extends GASConstructor>(constructor: T): T {
+export function GAS_State<T extends new (...args: any[]) => IGAS_Ref>(constructor: T): T {
     // --- 预收集和排序逻辑 ---
     const orderedProperties: { propName: string; meta: GAS_Property_Meta }[] = [];
     const seenProperties = new Set<string>();
@@ -327,8 +300,37 @@ export function GAS_State<T extends GASConstructor>(constructor: T): T {
     
     // --- 预收集结束 ---
 
+    // 创建CLASS_META对象
+    const classMeta = {
+        gas_property_names: Array.from(seenProperties),
+        gas_property_metadata: finalMetaMap,
+        gas_ordered_properties: orderedProperties,
+        
+        // 便捷方法
+        getProperty(name: string) {
+            return classMeta.gas_property_metadata.get(name);
+        },
+        
+        hasProperty(name: string) {
+            return classMeta.gas_property_metadata.has(name);
+        },
+        
+        get propertyCount() {
+            return classMeta.gas_property_names.length;
+        },
+        
+        get isGASClass() {
+            return classMeta.gas_property_names.length > 0;
+        }
+    };
+
     const WrappedClass = class extends (constructor as any) {
         private _gas_sync_enabled = false;
+
+        // 类元数据访问器 - 返回预创建的闭包
+        get CLASS_META() {
+            return classMeta;
+        }
 
         constructor(...args: any[]) {
             super(...args);
@@ -347,51 +349,17 @@ export function GAS_State<T extends GASConstructor>(constructor: T): T {
                 return;
             }
             
-            // 从类的静态属性获取属性列表
-            const propertiesToSync = (this.constructor as any).__gas_ordered_properties__;
+            // 从CLASS_META获取属性列表
+            const propertiesToSync = this.CLASS_META.gas_ordered_properties;
             
-            if (propertiesToSync) {
+            if (propertiesToSync && propertiesToSync.length > 0) {
                 world.syncer.on_self_state_changed({
                     type: GAS_SyncEventType.FULL_SYNC,
                     target: this,
                 });
             }
         }
-
-        /**
-         * 获取类的GAS属性列表
-         */
-        static getGASProperties(): { propName: string; meta: GAS_Property_Meta }[] {
-            return this.__gas_ordered_properties__ || [];
-        }
-
-        /**
-         * 获取类的GAS属性元数据
-         */
-        static getGASPropertyMetadata(): Map<string, GAS_Property_Meta> {
-            return this.__gas_property_metadata__ || new Map();
-        }
-
-        /**
-         * 获取类的GAS属性名列表
-         */
-        static getGASPropertyNames(): string[] {
-            return this.__gas_property_names__ || [];
-        }
-
-        /**
-         * 检查是否为GAS类
-         */
-        static isGASClass(): boolean {
-            return !!(this.__gas_ordered_properties__);
-        }
     };
-
-    // 将预收集的属性保存到类的静态属性
-    (WrappedClass as any).__gas_ordered_properties__ = orderedProperties;
-    // 保留原有的属性信息
-    (WrappedClass as any).__gas_property_metadata__ = finalMetaMap;
-    (WrappedClass as any).__gas_property_names__ = Array.from(seenProperties);
 
     return WrappedClass as unknown as T;
 }
