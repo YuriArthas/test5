@@ -1,6 +1,8 @@
 import { assert } from "cc";
 import { Pawn, Player, Team} from "./Unit";
-import { World } from "./World";
+import { ExtractInitDataType, World } from "./World";
+import { GAS_State, GAS_Object, GAS_Map, GAS_SyncEventType, GAS_PRC_NotifyEvent, IGAS_Object } from "./State";
+import { GAS_Property } from "./State";
 
 export class AttrOperator {
     value: BaseAttribute;
@@ -23,18 +25,54 @@ export type type属性创建Factory = {
 }
 
 export interface IAttributeHost {
-    get_attribute_manager(): IAttributeManager;
-    get_attribute_manager_inherit(): IAttributeHost;
+    get attribute_manager(): IAttributeManager;
+    get attribute_manager_inherit(): IAttributeHost;
 }
 
 export interface IAttributeManager {
+    create_object<T extends new (owner: GAS_Object, gas_id: number) => GAS_Object, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData): InstanceType<T>;
     get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T;
     world: World;
     attached_host: IAttributeHost;
     属性Map: Map<string, BaseAttribute>;
 }
 
+export interface AttributeManagerInitData {
+ 
+    attached_host: IAttributeHost;
+}
+
+@GAS_State
+export class AttributeManager extends GAS_Object implements IAttributeManager {
+    init(init_data: AttributeManagerInitData) {
+        super.init(init_data);
+        this.attached_host = init_data.attached_host;
+    }
+
+    get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T {
+        let attr = this.属性Map.get(name);
+        if(attr) {
+            return attr as T;
+        }
+        if(create_if_not_exist) {
+            attr = this.world.属性预定义器.创建(name, this);
+            this.属性Map.set(name, attr);
+        }
+        return attr as T;
+    }
+
+    world: World = undefined;
+
+    @GAS_Property({type: GAS_Object})
+    attached_host: IAttributeHost = undefined;
+
+    @GAS_Property({type: GAS_Map, own: true})
+    属性Map: Map<string, BaseAttribute> = new Map();
+}
+
 export class 属性预定义器 {
+    world: World = undefined;
+
     default_attr_formula: AttrFormula = undefined;
 
     注册(name: string, factory: type属性创建Factory) {
@@ -69,7 +107,11 @@ export class 属性预定义器 {
 
         let formula = 工厂.formula?? this.default_attr_formula;
 
-        const attr = new 工厂.attr_class(attr_mgr, name, base_value);
+        const attr = attr_mgr.create_object(工厂.attr_class, {
+            name: name,
+            attr_mgr: attr_mgr,
+            base_value: base_value,
+        });
         if(formula){
             attr.set_formula(formula);
         }
@@ -91,16 +133,30 @@ export type AttrFomulaResult = [number, number, number];
 
 export type AttrFormula = (attr: Attribute, source_collection?: AttrSourceCollection) => Readonly<AttrFomulaResult>;
 
-export class BaseAttribute{
+export interface BaseAttributeInitData {
+    base_value?: number;
+}
+
+export interface AttributeInitData extends BaseAttributeInitData {
+    attr_mgr: IAttributeManager;
+    name: string;
+}
+
+@GAS_State
+export class BaseAttribute extends GAS_Object{
     protected _dirty_publisher_array?: BaseAttribute[];
     protected _dirty_subscriber_array?: BaseAttribute[];
     protected dirty_event_list: ((attr: BaseAttribute, old_value: number) => void)[];
 
     _base_value: number = 0;
+
     _dirty: boolean = true;
 
-    constructor(base_value: number = 0) {
-        this._base_value = base_value;
+    init(init_data: BaseAttributeInitData) {
+        super.init(init_data);
+        if(init_data.base_value !== undefined) {
+            this._base_value = init_data.base_value;
+        }
     }
 
     value(): number {
@@ -108,6 +164,9 @@ export class BaseAttribute{
     }
 
     cached_value(): number {
+        if(this._dirty) {
+            this.do_refresh_value();
+        }
         return this._base_value;
     }
 
@@ -234,6 +293,26 @@ export class BaseAttribute{
         this.disconnect_all_subscriber();
         this.disconnect_all_dirty_publisher();
     }
+
+    protected notify_final_value(value: number): void {
+        const event: GAS_PRC_NotifyEvent = {
+            type: GAS_SyncEventType.PRC_Notify,
+            target: this,
+            method_name: "on_notify_final_value",
+            data: value,
+        }
+        this.world.syncer.on_self_state_changed(event);
+    }
+
+    protected do_refresh_value(source_collection?: AttrSourceCollection): void {
+        this._dirty = false;
+        this.notify_final_value(this._base_value);
+    }
+
+    protected on_notify_final_value(value: number): void {
+        this._base_value = value;
+        this.notify_final_value(value);  // 向下传递
+    }
 }
 
 export class Attribute extends BaseAttribute{
@@ -248,10 +327,10 @@ export class Attribute extends BaseAttribute{
     protected _formula: AttrFormula = undefined;
 
 
-    constructor(attr_mgr: IAttributeManager, name: string, base_value?: number) {
-        super(base_value);
-        this.name = name;
-        this.attr_mgr = attr_mgr;
+    init(init_data: AttributeInitData) {
+        super.init(init_data);
+        this.attr_mgr = init_data.attr_mgr;
+        this.name = init_data.name;
         this._final_value = 0;
     }
 
@@ -407,6 +486,7 @@ export class Attribute extends BaseAttribute{
         this._final_value = (r[0]) * (1 + r[1]) * r[2];
 
         this._dirty = false;
+        this.notify_final_value(this._final_value);
     }
 
     use_attr_operator_immediately(attr_operator: AttrOperator): void {

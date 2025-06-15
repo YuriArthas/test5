@@ -1,10 +1,11 @@
 import { _decorator } from 'cc';
 import { Effect } from './Effect';
 import { Attribute, AttrFormula, BaseAttribute, IAttributeManager, IAttributeHost } from './属性';
-import type { Unit} from './Unit';
+import { Unit} from './Unit';
 import type { World } from './World';
 import { AbilitySpec } from './AbilitySpec';
 import { AbilityInstance } from './AbilityInstance';
+import { GAS_Array, GAS_Map, GAS_Object, GAS_Property, GAS_State } from './State';
 const { ccclass, property } = _decorator;
 
 export interface ITagName {
@@ -93,34 +94,53 @@ export class TagManager {
     }
 }
 
-export interface ITagManager {
-    world: World;
 
-    owned_tags: Map<ITagName, number>;
-    blocked_other_tags: Map<ITagName, number>;
 
-    tag_ability_map: Map<ITagName, AbilityInstance[]>;
-    tag_effect_map: Map<ITagName, Effect[]>;
-}
- 
-export class ASC implements IAttributeManager, ITagManager {
+
+@GAS_State
+export class ASC extends GAS_Object implements IAttributeManager{
     world: World = undefined;
+
+    @GAS_Property({type: Unit, own: false})
     unit: Unit = undefined; // 每个ASC都必然有一个Unit
 
     // ITagManager
-    owned_tags: Map<ITagName, number> = new Map();
-    blocked_other_tags: Map<ITagName, number> = new Map();
+    @GAS_Property({type: GAS_Map, own: true})
+    owned_tags: GAS_Map<ITagName, number> = undefined;
 
-    tag_ability_map: Map<ITagName, AbilityInstance[]> = new Map();
-    tag_effect_map: Map<ITagName, Effect[]> = new Map();
+    @GAS_Property({type: GAS_Map, own: true})
+    blocked_other_tags: GAS_Map<ITagName, number> = undefined;
+
+    @GAS_Property({type: GAS_Map, own: true})
+    tag_ability_map: GAS_Map<ITagName, AbilityInstance[]> = undefined;
+
+    @GAS_Property({type: GAS_Map, own: true})
+    tag_effect_map: GAS_Map<ITagName, Effect[]> = undefined;
 
 
-    
     running_ability_instance_list: AbilityInstance[];
-    ability_spec_list: AbilitySpec[];
+
+    @GAS_Property({type: GAS_Array, own: true})
+    ability_spec_list: AbilitySpec[] = [];
     
     // IAttributeManager
-    属性Map: Map<string, BaseAttribute> = new Map();
+    @GAS_Property({type: GAS_Map, own: true})
+    属性Map: GAS_Map<string, BaseAttribute> = undefined;
+
+    constructor(world: World, gas_id: number) {
+        super(world, gas_id);
+        this.owned_tags = world.create_map();
+        this.blocked_other_tags = world.create_map();
+        this.tag_ability_map = world.create_map();
+        this.tag_effect_map = world.create_map();
+        this.ability_spec_list = world.create_array();
+        this.属性Map = world.create_map();
+    }
+
+    init(init_data: any) {
+        super.init(init_data);
+    }
+
     get attached_host(): IAttributeHost {
         return this.unit;
     }
@@ -138,4 +158,6 @@ export class ASC implements IAttributeManager, ITagManager {
     cast_ability(){
 
     }
+
+
 }

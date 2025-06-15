@@ -1,36 +1,57 @@
 import { _decorator, Component } from "cc";
 import { ASC } from "./AbilitySystemComponent";
-import { AbilitySpec, AbilityTarget } from "./AbilitySpec";
+import { AbilitySpec } from "./AbilitySpec";
 import { Effect } from "./Effect";
 import { FailedReasonContainer } from "./FailedReason";
 import { Unit, UnitInitData } from "./Unit";
+import { GAS_State, GAS_Object, IGAS_Object } from "./State";
+import { IAttributeHost, IAttributeManager, AttributeManager } from "./属性";
+import { World } from "./World";
 
 const { ccclass, property } = _decorator;
 
-export interface AbilityInstanceInitData extends UnitInitData {
+export interface AbilityInstanceInitData {
     caster: Unit;
-    target: AbilityTarget;
+    target: any;
     ability_spec: AbilitySpec;
     to_check_effects?: Effect[];
 }
 
-export class AbilityInstance extends Unit{
-    asc: ASC;
+@GAS_State
+export class AbilityInstance extends GAS_Object implements IAttributeHost{
+    _attribute_manager: AttributeManager = undefined;
     caster: Unit;  // ability_spec.caster和caster可能不是同一个
-    target: AbilityTarget;
-    ability_spec: AbilitySpec;
+    target: any;
+    ability_spec: AbilitySpec = undefined;
     to_check_effects: Effect[];
+
+    get asc(): ASC {
+        return this.caster.asc;
+    }
+
+    constructor(owner: GAS_Object, gas_id: number) {
+        super(owner, gas_id);
+        this._attribute_manager = this.create_object(AttributeManager, {attached_host: this});
+    }
 
     init(init_data: AbilityInstanceInitData) {
         super.init(init_data);
-        this.asc = init_data.asc;
+        
         this.caster = init_data.caster;
         this.target = init_data.target;
         this.ability_spec = init_data.ability_spec;
         this.to_check_effects = init_data.to_check_effects;
     }
+
+    get attribute_manager(): AttributeManager {
+        return this._attribute_manager;
+    }
+
+    get attribute_manager_inherit(): IAttributeHost {
+        return this.ability_spec;
+    }
     
-    _active() {
+    _execute() {
         this.ability_spec.running_ability_instance_list.push(this);
 
         for(let tag of this.ability_spec.ability_tags()) {
@@ -42,7 +63,7 @@ export class AbilityInstance extends Unit{
             }
         }
 
-        this.active();
+        this.on_execute();
     }
 
     protected _clean_ability() {
@@ -80,8 +101,9 @@ export class AbilityInstance extends Unit{
         return true;
     }
 
-    protected active() {}
+    protected on_execute() {
 
+    }
     protected end_ability() {
         this._clean_ability();
     }

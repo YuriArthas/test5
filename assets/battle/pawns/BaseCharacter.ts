@@ -8,8 +8,6 @@ export interface BaseCharacterInitData extends PawnInitData {
 }
 
 export class BaseCharacter extends Pawn {
-    static InitDataType: new ()=> BaseCharacterInitData = undefined;
-
     unit_data: 单位数据 = undefined;
 
     init(init_data: BaseCharacterInitData) {

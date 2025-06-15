@@ -1,55 +1,42 @@
 import { AbilityInstance } from "./AbilityInstance";
-import { ASC, ITagName } from "./AbilitySystemComponent";
+import { ITagName } from "./AbilitySystemComponent";
 import { Effect } from "./Effect";
 import { FailedReason, FailedReasonContainer, SimpleFailedReason } from "./FailedReason";
-import { create_and_init, Unit, World } from "./Unit";
+import { Unit } from "./Unit";
 import { Vec2 } from "cc";
-import { AttrFormula, Attribute, BaseAttribute, IAttributeHost, IAttributeManager } from "./属性";
+import { AttrFormula, Attribute, AttributeManager, BaseAttribute, IAttributeHost, IAttributeManager } from "./属性";
+import { GAS_Object, GAS_State } from "./State";
+import { World } from "./World";
 
 
 
 export interface AbilitySpecInitData {
     owner: Unit;
-    attribute_manager?: AbilitySpecAttributeManager;
+    attribute_manager?: AttributeManager;
 }
 
-export class AbilitySpecAttributeManager implements IAttributeManager {
 
-    get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T {
-        let attr = this.属性Map.get(name);
-        if(attr) {
-            return attr as T;
-        }
-        if(create_if_not_exist) {
-            attr = this.world.属性预定义器.创建(name, this);
-            this.属性Map.set(name, attr);
-        }
-        return attr as T;
+
+@GAS_State
+export class AbilitySpec extends GAS_Object implements IAttributeHost {
+    _attribute_manager: AttributeManager = undefined;
+    get attribute_manager(): AttributeManager {
+        return this._attribute_manager;
     }
-
-    world: World = undefined;
-    attached_host: IAttributeHost = undefined;
-    属性Map: Map<string, BaseAttribute> = new Map();
-}
-
-export class AbilitySpec implements IAttributeHost {
-    get_attribute_manager: AbilitySpecAttributeManager = undefined;
     owner: Unit = undefined;
     running_ability_instance_list: AbilityInstance[] = [];
 
     init(init_data: AbilitySpecInitData) {
         if(init_data.attribute_manager) {
-            this.get_attribute_manager = init_data.attribute_manager;
+            this._attribute_manager = init_data.attribute_manager;
         } else {
-            this.get_attribute_manager = new AbilitySpecAttributeManager();
-            this.get_attribute_manager.world = init_data.owner.asc.world;
-            this.get_attribute_manager.attached_host = this;
+            this._attribute_manager = this.world.create_object(AttributeManager, {attached_host: this});
         }
         
         this.owner = init_data.owner;
     }
 
-    get get_attribute_manager_inherit(): IAttributeHost {
+    get attribute_manager_inherit(): IAttributeHost {
         return this.owner;
     }
 
@@ -64,15 +51,14 @@ export class AbilitySpec implements IAttributeHost {
         }
 
         const ability_instance_class = this.ability_instance_class();
-        let ability_instance = create_and_init(ability_instance_class, {
-            world: this.owner.asc.world,
+        const ability_instance = this.world.create_object(ability_instance_class, {
             caster: this.owner,
             target: target,
             ability_spec: this,
             to_check_effects: to_check_effects,
         });
-
-        ability_instance._active();
+        
+        ability_instance._execute();
 
         return true;
     }

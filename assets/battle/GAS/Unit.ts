@@ -1,20 +1,15 @@
 import { ASC } from "./AbilitySystemComponent";
 import { _decorator, assert, Component } from "cc";
 import { Node } from "cc";
-import { World } from "./World";
+import { World, WorldRole } from "./World";
 import { 可被拖到Component } from "../可被拖到Component";
 import { IAttributeHost, IAttributeManager, 属性预定义器 } from "./属性";
-import { GAS_State } from "./State";
+import { GAS_State, GAS_Object, GAS_Property, GAS_Array, GAS_Set, GAS_Map, IGAS_Object } from "./State";
+import { ExtractInitDataType } from "./World";
 const { ccclass, property} = _decorator;
 
-type ExtractInitDataType<T> = T extends { prototype: { init(data: infer U): void } } ? U : never;
 
-export interface GAS_NodeInitData {
-    world: World;
-}
-
-export interface UnitInitData extends GAS_NodeInitData {
-    node?: Node;
+export interface UnitInitData {
     asc?: ASC;
 }
 
@@ -35,31 +30,26 @@ export class GAS_BaseComponent extends Component {
     asc: ASC = undefined;
 }
 
-export interface ILinkedNode {
-
-}
-
-export interface ILinkedComponent {
-
-}
-
 @GAS_State
-export class GAS_Node {
-    world: World = undefined;
+export class GAS_Node extends GAS_Object {
+
+    @GAS_Property({type: GAS_Array, own: true})
     components: GAS_Component[] = [];
+
+    @GAS_Property({type: GAS_Node, own: false})
     parent: GAS_Node = undefined;
+
+    @GAS_Property({type: GAS_Array, own: true})
     children: GAS_Node[] = [];
-    gas_id: number = undefined;
+
+
+    @GAS_Property({type: Boolean})
     active: boolean = true;
     private _activeInHierarchy: boolean = false;
     private _hasLoaded: boolean = false;
     private _hasStarted: boolean = false;
 
-    init(init_data: GAS_NodeInitData) {
-        this.gas_id = ++init_data.world.id_counter;
-        init_data.world.id_state_maps.set(this.gas_id, this);
-        init_data.world.node_id_maps.set(this, this.gas_id);
-        this.world = init_data.world;
+    init(init_data: any) {
         this._updateActiveInHierarchy();
     }
 
@@ -149,6 +139,10 @@ export class GAS_Node {
     onLoad() {
         if (this._hasLoaded) return;
         this._hasLoaded = true;
+
+        if(this.role == WorldRole.Server){
+            this.rpc_notify("onLoad");
+        }
         
         for (const component of this.components) {
             component.onLoad();
@@ -161,6 +155,10 @@ export class GAS_Node {
     start() {
         if (this._hasStarted) return;
         this._hasStarted = true;
+
+        if(this.role == WorldRole.Server){
+            this.rpc_notify("start");
+        }
         
         for (const component of this.components) {
             component.start();
@@ -189,7 +187,7 @@ export class GAS_Node {
     }
 
     private _updateActiveInHierarchy() {
-        const newActiveInHierarchy = this.active && (this.parent === undefined || this.parent._activeInHierarchy);
+        const newActiveInHierarchy = this.active && (this.parent?._activeInHierarchy || this as any == this.world);
         
         if (this._activeInHierarchy === newActiveInHierarchy) return;
         
@@ -211,15 +209,24 @@ export class GAS_Node {
     }
 
     onEnable() {
+        if(this.role == WorldRole.Server){
+            this.rpc_notify("onEnable");
+        }
+
         if (!this._hasStarted) {
             this.start();
         }
+
         for (const component of this.components) {
             component.onEnable();
         }
     }
 
     onDisable() {
+        if(this.role == WorldRole.Server){
+            this.rpc_notify("onDisable");
+        }
+
         for (const component of this.components) {
             component.onDisable();
         }
@@ -246,16 +253,17 @@ export class GAS_Node {
             child.onDestroy();
         }
 
-        // Unregister from world.
-        if (this.world) {
-            this.world.id_state_maps.delete(this.gas_id);
-            this.world.node_id_maps.delete(this);
-        }
-
         // Destroy components.
         for (const component of this.components) {
             component.onDestroy();
         }
+
+        if(this.role == WorldRole.Server){
+            this.rpc_notify("onDestroy");
+        }
+
+        // Unregister from world.
+        this.world.remove_id_state(this);
     }
 
     destroy_all_components() {
@@ -264,6 +272,8 @@ export class GAS_Node {
             this.remove_component(component);
         }
     }
+
+    
 }
 
 export interface GAS_ComponentInitData {
@@ -271,16 +281,19 @@ export interface GAS_ComponentInitData {
 }
 
 @GAS_State
-export class GAS_Component {
+export class GAS_Component extends GAS_Object {
     owner: GAS_Node = undefined;
     gas_id: number = undefined;
+
+    @GAS_Property({type: Boolean})
     private _enabled: boolean = true;
+    @GAS_Property({type: Boolean})
     private _hasLoaded: boolean = false;
+    @GAS_Property({type: Boolean})
     private _hasStarted: boolean = false;
 
     init(init_data: GAS_ComponentInitData) {
         this.owner = init_data.owner;
-        this.gas_id = ++init_data.owner.world.id_counter;
         this.onInit();
     }
 
@@ -341,6 +354,7 @@ export class GAS_Component {
 
     onDestroy() {
         this.onDestroyImpl();
+        this.world.remove_id_state(this);
         this.owner = undefined;
     }
 
@@ -369,42 +383,32 @@ export class GAS_Component {
     get hasStarted(): boolean {
         return this._hasStarted;
     }
-
-    get world(): World {
-        return this.owner.world;
-    }
 }
 
+@GAS_State
 export class Unit extends GAS_Node implements IAttributeHost {
-    static InitDataType: new ()=> UnitInitData = undefined;
 
-    get_attribute_manager(): IAttributeManager {
-        return this.asc;
-    }
-    get_attribute_manager_inherit(): IAttributeHost {
-        return undefined;
-    }
-
+    @GAS_Property({type: ASC, own: true})
     asc: ASC = undefined;  // 每个Unit都必然有ASC
-
-
 
     init(init_data: UnitInitData) {
         super.init(init_data);
-        const asc = init_data.asc?? new ASC();
+        const asc = init_data.asc?? this.create_object(ASC, {});
         this.asc = asc;
         asc.unit = this;
-        asc.world = this.world;
     }
 
-    get_world(): World {
-        return this.world;
+    get attribute_manager(): IAttributeManager {
+        return this.asc;
+    }
+    get attribute_manager_inherit(): IAttributeHost {
+        return undefined;
     }
 }
 
-
+@GAS_State
 export class Team extends Unit {
-    static InitDataType: new ()=> TeamInitData = undefined;
+    @GAS_Property(Number)
     team_id: number = 0;
 
     init(init_data: TeamInitData) {
@@ -412,32 +416,42 @@ export class Team extends Unit {
         this.team_id = init_data.team_id;
     }
 
-    get_attribute_manager_inherit(): IAttributeHost {
+    get attribute_manager_inherit(): IAttributeHost {
         return this.asc.world;
     }
 }
 
+@GAS_State
 export class Player extends Unit {
-    static InitDataType: new ()=> PlayerInitData = undefined;
 
+    @GAS_Property({type: Team, own: false})
     team: Team = undefined;
+
+    @GAS_Property({type: Number})
+    player_id: number = undefined;
+
+    get owner_player(): Player {
+        return this;
+    }
 
     init(init_data: PlayerInitData) {
         super.init(init_data);
         this.team = init_data.team;
+        this.player_id = this.world.apply_player_id();
     }
 
-    get_attribute_manager_inherit(): IAttributeHost {
+    get attribute_manager_inherit(): IAttributeHost {
         return this.team;
     }
 }
 
+@GAS_State
 export class Pawn extends Unit {
-    static InitDataType: new ()=> PawnInitData = undefined;
     
+    @GAS_Property({type: Player, own: false})
     player: Player = undefined;
 
-    get_attribute_manager_inherit(): IAttributeHost {
+    get attribute_manager_inherit(): IAttributeHost {
         return this.player;
     }
 
