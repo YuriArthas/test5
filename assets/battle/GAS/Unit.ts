@@ -58,16 +58,18 @@ export class GAS_Node extends GAS_Object {
         this.components.push(component);
         component.init(init_data);
         
-        if (this._hasLoaded) {
-            component.onLoad();
-        }
-        
-        if (this._hasStarted) {
-            component.start();
-        }
-
-        if (this.isActiveInHierarchy()) {
-            component.onEnable(); 
+        if (this.world.role === WorldRole.Server) {
+            if (this._hasLoaded && this._isInWorldTree()) {
+                component._internal_onLoad();
+            }
+            
+            if (this._hasStarted && this._isInWorldTree()) {
+                component._internal_start();
+            }
+    
+            if (this.isActiveInHierarchy()) {
+                component._internal_onEnable(); 
+            }
         }
 
         return component;
@@ -104,7 +106,9 @@ export class GAS_Node extends GAS_Object {
         const index = this.components.indexOf(component);
         if (index !== -1) {
             this.components.splice(index, 1);
-            component.onDestroy();
+            if (this.world.role === WorldRole.Server) {
+                component._internal_onDestroy();
+            }
         }
     }
 
@@ -114,7 +118,9 @@ export class GAS_Node extends GAS_Object {
         }
         this.children.push(child);
         child.parent = this;
-        child.onAddedToParent();
+        if (this.world.role === WorldRole.Server) {
+            child.onAddedToParent();
+        }
         child._updateActiveInHierarchy();
     }
 
@@ -124,7 +130,9 @@ export class GAS_Node extends GAS_Object {
             this.children.splice(index, 1);
             child.parent = undefined;
             child._updateActiveInHierarchy();
-            child.onRemovedFromParent();
+            if (this.world.role === WorldRole.Server) {
+                child.onRemovedFromParent();
+            }
         }
     }
 
@@ -136,47 +144,65 @@ export class GAS_Node extends GAS_Object {
         }
     }
 
-    onLoad() {
+    _internal_onLoad() {
         if (this._hasLoaded) return;
         this._hasLoaded = true;
 
+        this.onLoad();
+
+        for (const component of this.components) {
+            component._internal_onLoad();
+        }
+        for (const child of this.children) {
+            child._internal_onLoad();
+        }
+        
         if(this.role == WorldRole.Server){
             this.rpc_notify("onLoad");
         }
-        
-        for (const component of this.components) {
-            component.onLoad();
-        }
-        for (const child of this.children) {
-            child.onLoad();
-        }
     }
 
-    start() {
+    protected onLoad() {
+        
+    }
+
+    _internal_start() {
         if (this._hasStarted) return;
         this._hasStarted = true;
 
         if(this.role == WorldRole.Server){
             this.rpc_notify("start");
         }
-        
+
+        this.start();
+
         for (const component of this.components) {
-            component.start();
+            component._internal_start();
         }
         for (const child of this.children) {
-            child.start();
+            child._internal_start();
         }
     }
 
-    update(deltaTime: number) {
+    protected start() {
+        
+    }
+
+    _internal_update(deltaTime: number) {
         if (!this._activeInHierarchy) return;
         
+        this.update(deltaTime);
+
         for (const component of this.components) {
-            component.update(deltaTime);
+            component._internal_update(deltaTime);
         }
         for (const child of this.children) {
-            child.update(deltaTime);
+            child._internal_update(deltaTime);
         }
+    }
+
+    protected update(deltaTime: number) {
+        
     }
 
     setActive(active: boolean) {
@@ -193,10 +219,12 @@ export class GAS_Node extends GAS_Object {
         
         this._activeInHierarchy = newActiveInHierarchy;
         
-        if (newActiveInHierarchy) {
-            this.onEnable();
-        } else {
-            this.onDisable();
+        if (this.world.role === WorldRole.Server) {
+            if (newActiveInHierarchy) {
+                this._internal_onEnable();
+            } else {
+                this._internal_onDisable();
+            }
         }
         
         for (const child of this.children) {
@@ -208,39 +236,83 @@ export class GAS_Node extends GAS_Object {
         return this._activeInHierarchy;
     }
 
-    onEnable() {
+    private _isInWorldTree(): boolean {
+        let current: GAS_Node = this;
+        while (current) {
+            if (current === this.world) {
+                return true;
+            }
+            current = current.parent;
+        }
+        return false;
+    }
+
+    _internal_onEnable() {
         if(this.role == WorldRole.Server){
             this.rpc_notify("onEnable");
         }
 
         if (!this._hasStarted) {
-            this.start();
+            if (this.world.role === WorldRole.Server) {
+                this._internal_start();
+            }
         }
 
+        this.onEnable();
+
         for (const component of this.components) {
-            component.onEnable();
+            component._internal_onEnable();
         }
     }
 
-    onDisable() {
+    protected onEnable() {
+        
+    }
+
+    _internal_onDisable() {
         if(this.role == WorldRole.Server){
             this.rpc_notify("onDisable");
         }
 
+        this.onDisable();
+
         for (const component of this.components) {
-            component.onDisable();
+            component._internal_onDisable();
         }
     }
 
-    onAddedToParent() {
-        this.onLoad();
-    }
-
-    onRemovedFromParent() {
+    protected onDisable() {
         
     }
 
-    onDestroy() {
+    onAddedToParent() {
+        if (this._isInWorldTree()) {
+            this._onAddedToWorldTree();
+        }
+    }
+
+    private _onAddedToWorldTree() {
+        this._internal_onLoad();
+        for (const child of this.children) {
+            if (child._isInWorldTree()) {
+                child._onAddedToWorldTree();
+            }
+        }
+    }
+
+    onRemovedFromParent() {
+        if (!this._isInWorldTree()) {
+            this._onRemovedFromWorldTree();
+        }
+    }
+
+    private _onRemovedFromWorldTree() {
+        for (const child of this.children) {
+            child._onRemovedFromWorldTree();
+        }
+    }
+
+    _internal_onDestroy() {
         // Detach from parent first.
         if (this.parent) {
             this.parent.remove_child(this);
@@ -250,20 +322,26 @@ export class GAS_Node extends GAS_Object {
         // A copy is needed because child.onDestroy() will modify this.children.
         const childrenToDestroy = [...this.children];
         for (const child of childrenToDestroy) {
-            child.onDestroy();
+            child._internal_onDestroy();
         }
+
+        // Unregister from world.
+        this.world.remove_id_state(this);
+
+        this.onDestroy();
 
         // Destroy components.
         for (const component of this.components) {
-            component.onDestroy();
+            component._internal_onDestroy();
         }
 
         if(this.role == WorldRole.Server){
             this.rpc_notify("onDestroy");
         }
+    }
 
-        // Unregister from world.
-        this.world.remove_id_state(this);
+    protected onDestroy() {
+
     }
 
     destroy_all_components() {
@@ -272,8 +350,6 @@ export class GAS_Node extends GAS_Object {
             this.remove_component(component);
         }
     }
-
-    
 }
 
 export interface GAS_ComponentInitData {
@@ -301,64 +377,64 @@ export class GAS_Component extends GAS_Object {
         
     }
 
-    onLoad() {
+    _internal_onLoad() {
         if (this._hasLoaded) return;
         this._hasLoaded = true;
-        this.onLoadImpl();
+        this.onLoad();
     }
 
-    protected onLoadImpl() {
+    protected onLoad() {
         
     }
 
-    start() {
+    _internal_start() {
         if (this._hasStarted) return;
         this._hasStarted = true;
-        this.onStartImpl();
+        this.start();
     }
 
-    protected onStartImpl() {
+    protected start() {
         
     }
 
-    update(deltaTime: number) {
+    _internal_update(deltaTime: number) {
         if (!this._enabled || !this.owner?.isActiveInHierarchy()) return;
-        this.onUpdateImpl(deltaTime);
+        this.update(deltaTime);
     }
 
-    protected onUpdateImpl(deltaTime: number) {
+    protected update(deltaTime: number) {
         
     }
 
-    onEnable() {
+    _internal_onEnable() {
         if (!this._enabled) {
             this._enabled = true;
-            this.onEnableImpl();
+            this.onEnable();
         }
     }
 
-    protected onEnableImpl() {
+    protected onEnable() {
         
     }
 
-    onDisable() {
+    _internal_onDisable() {
         if (this._enabled) {
             this._enabled = false;
-            this.onDisableImpl();
+            this.onDisable();
         }
     }
 
-    protected onDisableImpl() {
+    protected onDisable() {
         
     }
 
-    onDestroy() {
-        this.onDestroyImpl();
+    _internal_onDestroy() {
+        this.onDestroy();
         this.world.remove_id_state(this);
         this.owner = undefined;
     }
 
-    protected onDestroyImpl() {
+    protected onDestroy() {
 
     }
 
@@ -370,9 +446,9 @@ export class GAS_Component extends GAS_Object {
         if (this._enabled === value) return;
         
         if (value) {
-            this.onEnable();
+            this._internal_onEnable();
         } else {
-            this.onDisable();
+            this._internal_onDisable();
         }
     }
 
