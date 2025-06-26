@@ -8,7 +8,7 @@ export interface IGAS_Object {
     readonly world: World;
     readonly gas_id: number;
     get valid(): boolean;
-    owner: GAS_Object;
+    node: GAS_Object;
     owner_player: Player;
 
     readonly role: WorldRole;
@@ -61,10 +61,10 @@ export class GAS_Object implements IGAS_Object {
     syncGASState() {}
 
     @GAS_Property({type: GAS_Object, ref: true})
-    owner: GAS_Object = undefined;
+    node: GAS_Object = undefined;
 
     get owner_player(): Player {
-        return this.owner.owner_player;
+        return this.node.owner_player;
     }
 
     get valid(): boolean {
@@ -73,7 +73,7 @@ export class GAS_Object implements IGAS_Object {
 
     constructor(owner: GAS_Object, gas_id: number) {
         this.gas_id = gas_id?? owner.world.apply_id();
-        this.owner = owner;
+        this.node = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
     }
@@ -87,7 +87,7 @@ export class GAS_Object implements IGAS_Object {
     }
 
     create_object<T extends new (owner: GAS_Object, gas_id: number) => GAS_Object, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData, owner?: GAS_Object): InstanceType<T> {
-        const obj = new ObjectClass(owner?? this.owner, this.world.apply_id());  // add_id_state会自动在ObjectClass的构造函数里调用
+        const obj = new ObjectClass(owner?? this.node, this.world.apply_id());  // add_id_state会自动在ObjectClass的构造函数里调用
         obj.syncGASState();
         obj.init(init_data);
         if(owner.role == WorldRole.Server){
@@ -97,19 +97,19 @@ export class GAS_Object implements IGAS_Object {
     }
 
     create_map<K, V>(owner?: GAS_Object): GAS_Map<K, V> {
-        const map = new GAS_Map<K, V>(owner?? this.owner, this.world.apply_id());
+        const map = new GAS_Map<K, V>(owner?? this.node, this.world.apply_id());
         map.syncGASState();
         return map;
     }
 
     create_set<T>(owner?: GAS_Object): GAS_Set<T> {
-        const set = new GAS_Set<T>(owner?? this.owner, this.world.apply_id());
+        const set = new GAS_Set<T>(owner?? this.node, this.world.apply_id());
         set.syncGASState();
         return set;
     }
 
     create_array<T>(owner?: GAS_Object): GAS_Array<T> {
-        const array = new GAS_Array<T>(owner?? this.owner, this.world.apply_id());
+        const array = new GAS_Array<T>(owner?? this.node, this.world.apply_id());
         array.syncGASState();
         return array;
     }
@@ -161,9 +161,9 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
     world: World;
     gas_id: number;
     private _gas_sync_enabled = false;
-    owner: GAS_Object;
+    node: GAS_Object;
     get owner_player(): Player {
-        return this.owner.owner_player;
+        return this.node.owner_player;
     }
 
     get role(): WorldRole {
@@ -177,7 +177,7 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
     constructor(owner: GAS_Object, gas_id: number) {
         super();
         this.gas_id = gas_id?? owner.world.apply_id();
-        this.owner = owner;
+        this.node = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
     }
@@ -237,20 +237,20 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
 export class GAS_Set<T> extends Set<T> implements IGAS_Object {
     world: World;
     gas_id: number;
-    owner: GAS_Object;
+    node: GAS_Object;
 
     get role(): WorldRole {
         return this.world.role;
     }
 
     get owner_player(): Player {
-        return this.owner.owner_player;
+        return this.node.owner_player;
     }
 
     constructor(owner: GAS_Object, gas_id: number) {
         super();
         this.gas_id = gas_id?? owner.world.apply_id();
-        this.owner = owner;
+        this.node = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
     }
@@ -265,7 +265,7 @@ export class GAS_Set<T> extends Set<T> implements IGAS_Object {
 export class GAS_Array<T> extends Array<T> implements IGAS_Object {
     world: World;
     gas_id: number;
-    owner: GAS_Object;
+    node: GAS_Object;
     private _gas_sync_enabled = false;
 
     get role(): WorldRole {
@@ -273,13 +273,13 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
     }
 
     get owner_player(): Player {
-        return this.owner.owner_player;
+        return this.node.owner_player;
     }
 
     constructor(owner: GAS_Object, gas_id: number) {
         super();
         this.gas_id = gas_id?? owner.world.apply_id();
-        this.owner = owner;
+        this.node = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
     }
@@ -605,7 +605,7 @@ export interface GAS_PropertyMap_Meta_Input {
     ref?: boolean;
 }
 
-export function GAS_PropertyMap<T extends IGAS_Object>(property_meta_input: GAS_PropertyMap_Meta_Input): (target: T, propertyName: string) => void {
+export function GAS_Property_Map<T extends IGAS_Object>(property_meta_input: GAS_PropertyMap_Meta_Input): (target: T, propertyName: string) => void {
     const input: GAS_Property_Meta_Input = {
         type: property_meta_input.map_type?? GAS_Map,
         extra_types: [property_meta_input.key_type, property_meta_input.value_type],
@@ -620,13 +620,20 @@ export interface GAS_PropertyArray_Meta_Input {
     ref?: boolean;
 }
 
-export function GAS_PropertyArray<T extends IGAS_Object>(property_meta_input: GAS_PropertyArray_Meta_Input): (target: T, propertyName: string) => void {
+export function GAS_Property_Array<T extends IGAS_Object>(property_meta_input: GAS_PropertyArray_Meta_Input): (target: T, propertyName: string) => void {
     const input: GAS_Property_Meta_Input = {
         type: property_meta_input.array_type?? GAS_Array,
         extra_types: [property_meta_input.item_type],
         ref: property_meta_input.ref,
     }
     return GAS_Property(input);
+}
+
+export function GAS_Property_Ref<T extends IGAS_Object>(property_meta_input: GAS_Property_Meta_Input): (target: T, propertyName: string) => void {
+    return GAS_Property({
+        ...property_meta_input,
+        ref: true,
+    });
 }
 
 

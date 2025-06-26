@@ -1,5 +1,5 @@
 import { assert } from "cc";
-import { GAS_Component, GAS_ComponentInitData, GAS_Node, Player, Team, UnitInitData } from "./Unit";
+import { GAS_Component, GAS_ComponentInitData, GAS_Node, Player, Team, Unit, UnitInitData} from "./Unit";
 import { 属性预定义器 } from "./属性";
 import { GAS_CreateStateEvent, GAS_PropertyChangedEvent, GAS_Object, GAS_RemoveStateEvent, GAS_SyncEvent, GAS_SyncEventType, IGAS_Object, GAS_Map, GAS_Set, GAS_Array, GAS_State, GAS_Property } from "./State";
 
@@ -17,7 +17,7 @@ export interface WorldInitData extends UnitInitData {
 }
 
 @GAS_State
-export class World extends GAS_Node {
+export class World extends Unit {
     
     get owner_player(): Player {
         return this.player_0;
@@ -64,7 +64,7 @@ export class World extends GAS_Node {
         super(trick_owner as GAS_Object, gas_id);
         // trick之后, 设置正确的owner和world
         this.world = this;
-        this.owner = this;
+        this.node = this;
     }
 
     static create_world<T extends new (trick_owner: GAS_Object, gas_id: number) => World, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData): InstanceType<T> {

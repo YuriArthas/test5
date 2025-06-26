@@ -1,7 +1,7 @@
 import { ASC } from "./AbilitySystemComponent";
 import { WorldRole } from "./World";
-import { IAttributeHost, IAttributeManager } from "./属性";
-import { GAS_State, GAS_Object, GAS_Property, GAS_Array } from "./State";
+import { AttributeManager} from "./属性";
+import { GAS_State, GAS_Object, GAS_Property, GAS_Array, GAS_Property_Ref } from "./State";
 import { ExtractInitDataType } from "./World";
 
 
@@ -22,17 +22,7 @@ export interface PawnInitData extends UnitInitData {
 }
 
 @GAS_State
-export class GAS_Node extends GAS_Object implements IAttributeHost {
-
-    @GAS_Property({type: ASC})
-    asc: ASC = undefined;  // 每个Unit都必然有ASC
-
-    get attribute_manager(): IAttributeManager {
-        return this.asc;
-    }
-    get attribute_manager_inherit(): IAttributeHost {
-        return undefined;
-    }
+export class GAS_Node extends GAS_Object {
 
     @GAS_Property({type: GAS_Array})
     private _components: GAS_Component[] = [];
@@ -45,7 +35,7 @@ export class GAS_Node extends GAS_Object implements IAttributeHost {
 
 
     @GAS_Property({type: Boolean})
-    active: boolean = true;
+    _active: boolean = true;
     
     private _activeInHierarchy: boolean = false;
     private _hasLoaded: boolean = false;
@@ -53,14 +43,11 @@ export class GAS_Node extends GAS_Object implements IAttributeHost {
 
     init(init_data: any) {
         this._updateActiveInHierarchy();
-        this.asc = this.create_object(ASC, {}, this);;
-        this.asc.node = this;
     }
 
-    add_component<T extends GAS_Component & { init(data: any): void }>(ComponentType: new () => T, init_data: ExtractInitDataType<typeof ComponentType>): T {
-        const component = new ComponentType();
+    add_component<T extends GAS_Component & { init(data: any): void }>(ComponentType: new (...any: any[]) => T, init_data: ExtractInitDataType<typeof ComponentType>): T {
+        const component = this.create_object(ComponentType, init_data, this);
         this._components.push(component);
-        component.init(init_data);
         
         if (this.world.role & WorldRole.Server) {
             if (this._hasLoaded && this._isInWorldTree()) {
@@ -207,14 +194,14 @@ export class GAS_Node extends GAS_Object implements IAttributeHost {
     }
 
     setActive(active: boolean) {
-        if (this.active === active) return;
+        if (this._active === active) return;
         
-        this.active = active;
+        this._active = active;
         this._updateActiveInHierarchy();
     }
 
     private _updateActiveInHierarchy() {
-        const newActiveInHierarchy = this.active && (this.parent?._activeInHierarchy || this as any == this.world);
+        const newActiveInHierarchy = this._active && (this.parent?._activeInHierarchy || this as any == this.world);
         
         if (this._activeInHierarchy === newActiveInHierarchy) return;
         
@@ -363,8 +350,8 @@ export class GAS_Component extends GAS_Object {
     @GAS_Property({type: Boolean})
     private _hasStarted: boolean = false;
 
-    @GAS_Property({type: GAS_Node, ref: true})
-    owner: GAS_Node = undefined;
+    @GAS_Property_Ref({type: GAS_Node})
+    node: GAS_Node = undefined;
 
     init(init_data: GAS_ComponentInitData) {
 
@@ -424,7 +411,7 @@ export class GAS_Component extends GAS_Object {
 
     _internal_onDestroy() {
         this.onDestroy();
-        this.owner = undefined;
+        this.node = undefined;
     }
 
     protected onDestroy() {
@@ -454,8 +441,34 @@ export class GAS_Component extends GAS_Object {
     }
 }
 
+export class Unit extends GAS_Node {
+    @GAS_Property_Ref({type: ASC})
+    asc: ASC = undefined;
+
+    @GAS_Property_Ref({type: AttributeManager})
+    attribute_manager: AttributeManager = undefined;
+
+    init_asc(): ASC {
+        return this.add_component(ASC, {});
+    }
+
+    init_attribute_manager(): AttributeManager {
+        return this.add_component(AttributeManager, {});
+    }
+
+    init(init_data: any) {
+        super.init(init_data);
+        this.attribute_manager = this.init_attribute_manager();
+        this.asc = this.init_asc();
+    }
+
+    get attribute_manager_inherit(): Unit {
+        return this.world;
+    }
+}
+
 @GAS_State
-export class Team extends GAS_Node {
+export class Team extends Unit {
     @GAS_Property(Number)
     team_id: number = 0;
 
@@ -464,13 +477,13 @@ export class Team extends GAS_Node {
         this.team_id = init_data.team_id;
     }
 
-    get attribute_manager_inherit(): IAttributeHost {
-        return this.asc.world;
+    get attribute_manager_inherit(): Unit {
+        return this.world;
     }
 }
 
 @GAS_State
-export class Player extends GAS_Node {
+export class Player extends Unit {
 
     @GAS_Property({type: Team, ref: true})
     team: Team = undefined;
@@ -488,14 +501,16 @@ export class Player extends GAS_Node {
         this.player_id = this.world.apply_player_id();
     }
 
-    get attribute_manager_inherit(): IAttributeHost {
+    get attribute_manager_inherit(): Unit {
         return this.team;
     }
 }
 
 @GAS_State
-export class Pawn extends GAS_Node {
-    
+export class Pawn extends Unit {
+    get attribute_manager_inherit(): Unit {
+        return this.owner_player;
+    }
 }
 
 // 创建一个Unit, 并返回它, 脚本总是这样创建Unit

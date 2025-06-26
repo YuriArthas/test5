@@ -1,11 +1,11 @@
 import { _decorator } from 'cc';
 import { Effect } from './Effect';
-import { Attribute, AttrFormula, BaseAttribute, IAttributeManager, IAttributeHost } from './属性';
+import { Attribute, AttrFormula, BaseAttribute, AttributeManager} from './属性';
 import { GAS_Component, GAS_Node} from './Unit';
 import type { World } from './World';
 import { AbilitySpec } from './AbilitySpec';
 import { AbilityInstance } from './AbilityInstance';
-import { GAS_Array, GAS_Map, GAS_Object, GAS_Property, GAS_State } from './State';
+import { GAS_Array, GAS_Map, GAS_Object, GAS_Property, GAS_Property_Array, GAS_Property_Ref, GAS_State } from './State';
 const { ccclass, property } = _decorator;
 
 export interface ITagName {
@@ -98,12 +98,7 @@ export class TagManager {
 
 
 @GAS_State
-export class ASC extends GAS_Component implements IAttributeManager{
-    world: World = undefined;
-
-    @GAS_Property({type: GAS_Node, ref: true})
-    node: GAS_Node = undefined; // 每个ASC都必然有一个Unit
-
+export class ASC extends GAS_Component{
     // ITagManager
     @GAS_Property({type: GAS_Map})
     owned_tags: GAS_Map<ITagName, number> = undefined;
@@ -120,11 +115,11 @@ export class ASC extends GAS_Component implements IAttributeManager{
 
     running_ability_instance_list: AbilityInstance[];
 
-    @GAS_Property({type: GAS_Array})
+    @GAS_Property_Array({item_type: AbilitySpec})
     ability_spec_list: AbilitySpec[] = [];
     
-    // IAttributeManager
-    属性Map: GAS_Map<string, BaseAttribute> = undefined;
+    @GAS_Property_Ref({type: AttributeManager})
+    attribute_manager: AttributeManager = undefined;
 
     constructor(world: World, gas_id: number) {
         super(world, gas_id);
@@ -133,25 +128,12 @@ export class ASC extends GAS_Component implements IAttributeManager{
         this.tag_ability_map = world.create_map();
         this.tag_effect_map = world.create_map();
         this.ability_spec_list = world.create_array();
-        this.属性Map = world.create_map();
+        
     }
 
-    init(init_data: any) {
-        super.init(init_data);
-    }
-
-    get attached_host(): IAttributeHost {
-        return this.node;
-    }
-
-    get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist: boolean = true): T {
-        let attr = this.属性Map.get(name);
-        if(!attr && create_if_not_exist) {
-            attr = this.world.属性预定义器.创建(name, this);
-            this.属性Map.set(name, attr);
-        }
-
-        return attr as T;
+    onLoad() {
+        super.onLoad();
+        this.attribute_manager = this.node.get_component(AttributeManager);
     }
 
     cast_ability(){

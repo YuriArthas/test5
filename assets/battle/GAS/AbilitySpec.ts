@@ -23,7 +23,7 @@ export class AbilitySpec extends GAS_Object {
     get attribute_manager(): AttributeManager {
         return this._attribute_manager;
     }
-    owner: GAS_Node = undefined;
+    node: GAS_Node = undefined;
     running_ability_instance_list: AbilityInstance[] = [];
 
     init(init_data: AbilitySpecInitData) {
@@ -33,11 +33,11 @@ export class AbilitySpec extends GAS_Object {
             this._attribute_manager = this.world.create_object(AttributeManager, {attached_host: this});
         }
         
-        this.owner = init_data.owner;
+        this.node = init_data.owner;
     }
 
     get attribute_manager_inherit(): IAttributeHost {
-        return this.owner;
+        return this.node;
     }
 
     check_target(target: any, reason?: FailedReasonContainer): boolean {
@@ -52,7 +52,7 @@ export class AbilitySpec extends GAS_Object {
 
         const ability_instance_class = this.ability_instance_class();
         const ability_instance = this.world.create_object(ability_instance_class, {
-            caster: this.owner,
+            caster: this.node,
             target: target,
             ability_spec: this,
             to_check_effects: to_check_effects,
@@ -73,7 +73,7 @@ export class AbilitySpec extends GAS_Object {
         const blocked_tags = this.blocked_tags();
         if(blocked_tags) {
             for(let tag of blocked_tags) {
-                if(this.owner.asc.owned_tags.has(tag)) {
+                if(this.node.asc.owned_tags.has(tag)) {
                     if (reason) {
                         reason.value = new SimpleFailedReason("Blocked tag found: " + tag);
                     }

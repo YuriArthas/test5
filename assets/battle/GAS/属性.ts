@@ -36,10 +36,7 @@ export class AttributeManager extends GAS_Component {
     
     get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T {
         let attr = this.属性Map.get(name);
-        if(attr) {
-            return attr as T;
-        }
-        if(create_if_not_exist) {
+        if(!attr && create_if_not_exist) {
             attr = this.world.属性预定义器.创建(name, this);
             this.属性Map.set(name, attr);
         }
@@ -371,11 +368,11 @@ export class Attribute extends BaseAttribute{
     calc_inherit(source_collection?: AttrSourceCollection): AttrFomulaResult {
     
         const ret: AttrFomulaResult = [0, 0, 1];
-        const attached_any = this.attr_mgr.owner;
+        const attached_any = this.attr_mgr.node;
         if(attached_any){
             if(attached_any instanceof Pawn){
                 if(attached_any.owner_player){
-                    const player_attr = attached_any.owner_player.asc.get_attribute(this.name);
+                    const player_attr = attached_any.owner_player.attribute_manager.get_attribute(this.name);
                     if(player_attr instanceof Attribute){
                         const r = player_attr.cached_result();
                         ret[0] += r[0];
@@ -388,7 +385,7 @@ export class Attribute extends BaseAttribute{
                 }
             }else if(attached_any instanceof Player){
                 if(attached_any.team){
-                    const team_attr = attached_any.team.asc.get_attribute(this.name);
+                    const team_attr = attached_any.team.attribute_manager.get_attribute(this.name);
                     if(team_attr instanceof Attribute){
                         const r = team_attr.cached_result();
                         ret[0] += r[0];
@@ -401,7 +398,7 @@ export class Attribute extends BaseAttribute{
                 }
             }else if(attached_any instanceof Team){
                 if(attached_any.world){
-                    const world_attr = attached_any.asc.world.asc.get_attribute(this.name);
+                    const world_attr = attached_any.world.attribute_manager.get_attribute(this.name);
                     if(world_attr instanceof Attribute){
                         const r = world_attr.cached_result();
                         ret[0] += r[0];
