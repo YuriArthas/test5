@@ -1,7 +1,7 @@
 import { _decorator } from 'cc';
 import { Effect } from './Effect';
 import { Attribute, AttrFormula, BaseAttribute, IAttributeManager, IAttributeHost } from './属性';
-import { Unit} from './Unit';
+import { GAS_Component, GAS_Node} from './Unit';
 import type { World } from './World';
 import { AbilitySpec } from './AbilitySpec';
 import { AbilityInstance } from './AbilityInstance';
@@ -98,33 +98,32 @@ export class TagManager {
 
 
 @GAS_State
-export class ASC extends GAS_Object implements IAttributeManager{
+export class ASC extends GAS_Component implements IAttributeManager{
     world: World = undefined;
 
-    @GAS_Property({type: Unit, own: false})
-    unit: Unit = undefined; // 每个ASC都必然有一个Unit
+    @GAS_Property({type: GAS_Node, ref: true})
+    node: GAS_Node = undefined; // 每个ASC都必然有一个Unit
 
     // ITagManager
-    @GAS_Property({type: GAS_Map, own: true})
+    @GAS_Property({type: GAS_Map})
     owned_tags: GAS_Map<ITagName, number> = undefined;
 
-    @GAS_Property({type: GAS_Map, own: true})
+    @GAS_Property({type: GAS_Map})
     blocked_other_tags: GAS_Map<ITagName, number> = undefined;
 
-    @GAS_Property({type: GAS_Map, own: true})
+    @GAS_Property({type: GAS_Map})
     tag_ability_map: GAS_Map<ITagName, AbilityInstance[]> = undefined;
 
-    @GAS_Property({type: GAS_Map, own: true})
+    @GAS_Property({type: GAS_Map})
     tag_effect_map: GAS_Map<ITagName, Effect[]> = undefined;
 
 
     running_ability_instance_list: AbilityInstance[];
 
-    @GAS_Property({type: GAS_Array, own: true})
+    @GAS_Property({type: GAS_Array})
     ability_spec_list: AbilitySpec[] = [];
     
     // IAttributeManager
-    @GAS_Property({type: GAS_Map, own: true})
     属性Map: GAS_Map<string, BaseAttribute> = undefined;
 
     constructor(world: World, gas_id: number) {
@@ -142,7 +141,7 @@ export class ASC extends GAS_Object implements IAttributeManager{
     }
 
     get attached_host(): IAttributeHost {
-        return this.unit;
+        return this.node;
     }
 
     get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist: boolean = true): T {

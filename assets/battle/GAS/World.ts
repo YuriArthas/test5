@@ -1,13 +1,14 @@
 import { assert } from "cc";
-import { GAS_Component, GAS_ComponentInitData, GAS_Node, Player, Team, Unit, UnitInitData } from "./Unit";
+import { GAS_Component, GAS_ComponentInitData, GAS_Node, Player, Team, UnitInitData } from "./Unit";
 import { 属性预定义器 } from "./属性";
 import { GAS_CreateStateEvent, GAS_PropertyChangedEvent, GAS_Object, GAS_RemoveStateEvent, GAS_SyncEvent, GAS_SyncEventType, IGAS_Object, GAS_Map, GAS_Set, GAS_Array, GAS_State, GAS_Property } from "./State";
 
 export type ExtractInitDataType<T> = T extends { prototype: { init(init_data: infer U): void } } ? U : never;
 
 export enum WorldRole {
-    Server,
-    Client,
+    Server = 1,
+    Client = 2,
+    Multi = 3,
 }
 
 export interface WorldInitData extends UnitInitData {
@@ -16,7 +17,7 @@ export interface WorldInitData extends UnitInitData {
 }
 
 @GAS_State
-export class World extends Unit {
+export class World extends GAS_Node {
     
     get owner_player(): Player {
         return this.player_0;
@@ -46,7 +47,7 @@ export class World extends Unit {
     @GAS_Property({type: Player})
     player_0: Player = undefined;  // default player
 
-    @GAS_Property({type: GAS_Map, own: true})
+    @GAS_Property({type: GAS_Map})
     player_map: GAS_Map<number, Player> = undefined;
 
     
@@ -64,7 +65,6 @@ export class World extends Unit {
         // trick之后, 设置正确的owner和world
         this.world = this;
         this.owner = this;
-        this.add_id_state(this, false);
     }
 
     static create_world<T extends new (trick_owner: GAS_Object, gas_id: number) => World, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData): InstanceType<T> {
@@ -75,12 +75,12 @@ export class World extends Unit {
                 }
             }
         }
-        const obj = new ObjectClass(trick_owner as GAS_Object, 0) as InstanceType<T>;
-        obj.init(init_data as any);
-        obj.syncGASState();
-        obj.onLoad();
-        obj.start();
-        return obj;
+        const world = new ObjectClass(trick_owner as GAS_Object, 0) as InstanceType<T>;
+        world.init(init_data as any);
+        world.syncGASState();
+        world.onAddedToParent();
+        world.add_id_state(world, false);
+        return world;
     }
 
     init(init_data: WorldInitData) {
@@ -102,9 +102,6 @@ export class World extends Unit {
     }
 
     add_id_state(state: IGAS_Object, send_sync_event: boolean = true) {
-        if(state.gas_id === undefined) {
-            state.gas_id = this.apply_id();
-        }
         this.id_state_maps.set(state.gas_id, state);
         this.state_id_maps.set(state, state.gas_id);
         if(send_sync_event) {

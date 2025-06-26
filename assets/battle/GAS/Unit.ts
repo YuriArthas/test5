@@ -1,12 +1,8 @@
 import { ASC } from "./AbilitySystemComponent";
-import { _decorator, assert, Component } from "cc";
-import { Node } from "cc";
-import { World, WorldRole } from "./World";
-import { 可被拖到Component } from "../可被拖到Component";
-import { IAttributeHost, IAttributeManager, 属性预定义器 } from "./属性";
-import { GAS_State, GAS_Object, GAS_Property, GAS_Array, GAS_Set, GAS_Map, IGAS_Object } from "./State";
+import { WorldRole } from "./World";
+import { IAttributeHost, IAttributeManager } from "./属性";
+import { GAS_State, GAS_Object, GAS_Property, GAS_Array } from "./State";
 import { ExtractInitDataType } from "./World";
-const { ccclass, property} = _decorator;
 
 
 export interface UnitInitData {
@@ -25,40 +21,48 @@ export interface PawnInitData extends UnitInitData {
     player: Player;
 }
 
-
-export class GAS_BaseComponent extends Component {
-    asc: ASC = undefined;
-}
-
 @GAS_State
-export class GAS_Node extends GAS_Object {
+export class GAS_Node extends GAS_Object implements IAttributeHost {
 
-    @GAS_Property({type: GAS_Array, own: true})
-    components: GAS_Component[] = [];
+    @GAS_Property({type: ASC})
+    asc: ASC = undefined;  // 每个Unit都必然有ASC
 
-    @GAS_Property({type: GAS_Node, own: false})
+    get attribute_manager(): IAttributeManager {
+        return this.asc;
+    }
+    get attribute_manager_inherit(): IAttributeHost {
+        return undefined;
+    }
+
+    @GAS_Property({type: GAS_Array})
+    private _components: GAS_Component[] = [];
+
+    @GAS_Property({type: GAS_Node, ref: true})
     parent: GAS_Node = undefined;
 
-    @GAS_Property({type: GAS_Array, own: true})
-    children: GAS_Node[] = [];
+    @GAS_Property({type: GAS_Array})
+    private _children: GAS_Node[] = [];
 
 
     @GAS_Property({type: Boolean})
     active: boolean = true;
+    
     private _activeInHierarchy: boolean = false;
     private _hasLoaded: boolean = false;
     private _hasStarted: boolean = false;
 
     init(init_data: any) {
         this._updateActiveInHierarchy();
+        this.asc = this.create_object(ASC, {}, this);;
+        this.asc.node = this;
     }
 
     add_component<T extends GAS_Component & { init(data: any): void }>(ComponentType: new () => T, init_data: ExtractInitDataType<typeof ComponentType>): T {
         const component = new ComponentType();
-        this.components.push(component);
+        this._components.push(component);
         component.init(init_data);
         
-        if (this.world.role === WorldRole.Server) {
+        if (this.world.role & WorldRole.Server) {
             if (this._hasLoaded && this._isInWorldTree()) {
                 component._internal_onLoad();
             }
@@ -75,8 +79,8 @@ export class GAS_Node extends GAS_Object {
         return component;
     }
 
-    get_component<T extends GAS_Component>(ComponentType: new () => T): T | undefined {
-        for (const component of this.components) {
+    get_component<T extends GAS_Component>(ComponentType: new (owner: GAS_Object, gas_id: number) => T): T | undefined {
+        for (const component of this._components) {
             if (component instanceof ComponentType) {
                 return component as T;
             }
@@ -84,12 +88,12 @@ export class GAS_Node extends GAS_Object {
         return undefined;
     }
 
-    get_components<T extends GAS_Component>(ComponentType: new () => T): T[] {
-        return this.components.filter(c => c instanceof ComponentType) as T[];
+    get_components<T extends GAS_Component>(ComponentType: new (owner: GAS_Object, gas_id: number) => T): T[] {
+        return this._components.filter(c => c instanceof ComponentType) as T[];
     }
 
-    get_component_in_children<T extends GAS_Component>(ComponentType: new () => T): T | undefined {
-        for (const child of this.children) {
+    get_component_in_children<T extends GAS_Component>(ComponentType: new (owner: GAS_Object, gas_id: number) => T): T | undefined {
+        for (const child of this._children) {
             const component = child.get_component(ComponentType);
             if (component) {
                 return component;
@@ -103,10 +107,10 @@ export class GAS_Node extends GAS_Object {
     }
 
     remove_component(component: GAS_Component) {
-        const index = this.components.indexOf(component);
+        const index = this._components.indexOf(component);
         if (index !== -1) {
-            this.components.splice(index, 1);
-            if (this.world.role === WorldRole.Server) {
+            this._components.splice(index, 1);
+            if (this.world.role & WorldRole.Server) {
                 component._internal_onDestroy();
             }
         }
@@ -116,21 +120,21 @@ export class GAS_Node extends GAS_Object {
         if (child.parent) {
             child.parent.remove_child(child);
         }
-        this.children.push(child);
+        this._children.push(child);
         child.parent = this;
-        if (this.world.role === WorldRole.Server) {
+        if (this.world.role & WorldRole.Server) {
             child.onAddedToParent();
         }
         child._updateActiveInHierarchy();
     }
 
     remove_child(child: GAS_Node) {
-        const index = this.children.indexOf(child);
+        const index = this._children.indexOf(child);
         if (index !== -1) {
-            this.children.splice(index, 1);
+            this._children.splice(index, 1);
             child.parent = undefined;
             child._updateActiveInHierarchy();
-            if (this.world.role === WorldRole.Server) {
+            if (this.role & WorldRole.Server) {
                 child.onRemovedFromParent();
             }
         }
@@ -150,14 +154,14 @@ export class GAS_Node extends GAS_Object {
 
         this.onLoad();
 
-        for (const component of this.components) {
+        for (const component of this._components) {
             component._internal_onLoad();
         }
-        for (const child of this.children) {
+        for (const child of this._children) {
             child._internal_onLoad();
         }
         
-        if(this.role == WorldRole.Server){
+        if(this.role & WorldRole.Server){
             this.rpc_notify("onLoad");
         }
     }
@@ -170,16 +174,13 @@ export class GAS_Node extends GAS_Object {
         if (this._hasStarted) return;
         this._hasStarted = true;
 
-        if(this.role == WorldRole.Server){
-            this.rpc_notify("start");
-        }
-
         this.start();
+        this.rpc_notify("start");
 
-        for (const component of this.components) {
+        for (const component of this._components) {
             component._internal_start();
         }
-        for (const child of this.children) {
+        for (const child of this._children) {
             child._internal_start();
         }
     }
@@ -193,10 +194,10 @@ export class GAS_Node extends GAS_Object {
         
         this.update(deltaTime);
 
-        for (const component of this.components) {
+        for (const component of this._components) {
             component._internal_update(deltaTime);
         }
-        for (const child of this.children) {
+        for (const child of this._children) {
             child._internal_update(deltaTime);
         }
     }
@@ -219,7 +220,7 @@ export class GAS_Node extends GAS_Object {
         
         this._activeInHierarchy = newActiveInHierarchy;
         
-        if (this.world.role === WorldRole.Server) {
+        if (this.role & WorldRole.Server) {
             if (newActiveInHierarchy) {
                 this._internal_onEnable();
             } else {
@@ -227,7 +228,7 @@ export class GAS_Node extends GAS_Object {
             }
         }
         
-        for (const child of this.children) {
+        for (const child of this._children) {
             child._updateActiveInHierarchy();
         }
     }
@@ -248,19 +249,19 @@ export class GAS_Node extends GAS_Object {
     }
 
     _internal_onEnable() {
-        if(this.role == WorldRole.Server){
+        if(this.role & WorldRole.Server){
             this.rpc_notify("onEnable");
         }
 
         if (!this._hasStarted) {
-            if (this.world.role === WorldRole.Server) {
+            if (this.role & WorldRole.Server) {
                 this._internal_start();
             }
         }
 
         this.onEnable();
 
-        for (const component of this.components) {
+        for (const component of this._components) {
             component._internal_onEnable();
         }
     }
@@ -270,13 +271,13 @@ export class GAS_Node extends GAS_Object {
     }
 
     _internal_onDisable() {
-        if(this.role == WorldRole.Server){
+        if(this.role & WorldRole.Server){
             this.rpc_notify("onDisable");
         }
 
         this.onDisable();
 
-        for (const component of this.components) {
+        for (const component of this._components) {
             component._internal_onDisable();
         }
     }
@@ -293,7 +294,7 @@ export class GAS_Node extends GAS_Object {
 
     private _onAddedToWorldTree() {
         this._internal_onLoad();
-        for (const child of this.children) {
+        for (const child of this._children) {
             if (child._isInWorldTree()) {
                 child._onAddedToWorldTree();
             }
@@ -307,7 +308,7 @@ export class GAS_Node extends GAS_Object {
     }
 
     private _onRemovedFromWorldTree() {
-        for (const child of this.children) {
+        for (const child of this._children) {
             child._onRemovedFromWorldTree();
         }
     }
@@ -320,18 +321,15 @@ export class GAS_Node extends GAS_Object {
 
         // Destroy children recursively.
         // A copy is needed because child.onDestroy() will modify this.children.
-        const childrenToDestroy = [...this.children];
+        const childrenToDestroy = [...this._children];
         for (const child of childrenToDestroy) {
             child._internal_onDestroy();
         }
 
-        // Unregister from world.
-        this.world.remove_id_state(this);
-
         this.onDestroy();
 
         // Destroy components.
-        for (const component of this.components) {
+        for (const component of this._components) {
             component._internal_onDestroy();
         }
 
@@ -345,7 +343,7 @@ export class GAS_Node extends GAS_Object {
     }
 
     destroy_all_components() {
-        const componentsToDestroy = [...this.components];
+        const componentsToDestroy = [...this._components];
         for (const component of componentsToDestroy) {
             this.remove_component(component);
         }
@@ -353,14 +351,11 @@ export class GAS_Node extends GAS_Object {
 }
 
 export interface GAS_ComponentInitData {
-    owner: GAS_Node;
+    
 }
 
 @GAS_State
 export class GAS_Component extends GAS_Object {
-    owner: GAS_Node = undefined;
-    gas_id: number = undefined;
-
     @GAS_Property({type: Boolean})
     private _enabled: boolean = true;
     @GAS_Property({type: Boolean})
@@ -368,13 +363,11 @@ export class GAS_Component extends GAS_Object {
     @GAS_Property({type: Boolean})
     private _hasStarted: boolean = false;
 
-    init(init_data: GAS_ComponentInitData) {
-        this.owner = init_data.owner;
-        this.onInit();
-    }
+    @GAS_Property({type: GAS_Node, ref: true})
+    owner: GAS_Node = undefined;
 
-    protected onInit() {
-        
+    init(init_data: GAS_ComponentInitData) {
+
     }
 
     _internal_onLoad() {
@@ -391,6 +384,7 @@ export class GAS_Component extends GAS_Object {
         if (this._hasStarted) return;
         this._hasStarted = true;
         this.start();
+        this.rpc_notify("start");
     }
 
     protected start() {
@@ -398,7 +392,7 @@ export class GAS_Component extends GAS_Object {
     }
 
     _internal_update(deltaTime: number) {
-        if (!this._enabled || !this.owner?.isActiveInHierarchy()) return;
+        if (!this._enabled || !this.owner_player?.isActiveInHierarchy()) return;
         this.update(deltaTime);
     }
 
@@ -430,7 +424,6 @@ export class GAS_Component extends GAS_Object {
 
     _internal_onDestroy() {
         this.onDestroy();
-        this.world.remove_id_state(this);
         this.owner = undefined;
     }
 
@@ -462,28 +455,7 @@ export class GAS_Component extends GAS_Object {
 }
 
 @GAS_State
-export class Unit extends GAS_Node implements IAttributeHost {
-
-    @GAS_Property({type: ASC, own: true})
-    asc: ASC = undefined;  // 每个Unit都必然有ASC
-
-    init(init_data: UnitInitData) {
-        super.init(init_data);
-        const asc = init_data.asc?? this.create_object(ASC, {});
-        this.asc = asc;
-        asc.unit = this;
-    }
-
-    get attribute_manager(): IAttributeManager {
-        return this.asc;
-    }
-    get attribute_manager_inherit(): IAttributeHost {
-        return undefined;
-    }
-}
-
-@GAS_State
-export class Team extends Unit {
+export class Team extends GAS_Node {
     @GAS_Property(Number)
     team_id: number = 0;
 
@@ -498,9 +470,9 @@ export class Team extends Unit {
 }
 
 @GAS_State
-export class Player extends Unit {
+export class Player extends GAS_Node {
 
-    @GAS_Property({type: Team, own: false})
+    @GAS_Property({type: Team, ref: true})
     team: Team = undefined;
 
     @GAS_Property({type: Number})
@@ -522,22 +494,9 @@ export class Player extends Unit {
 }
 
 @GAS_State
-export class Pawn extends Unit {
+export class Pawn extends GAS_Node {
     
-    @GAS_Property({type: Player, own: false})
-    player: Player = undefined;
-
-    get attribute_manager_inherit(): IAttributeHost {
-        return this.player;
-    }
-
-    init(init_data: PawnInitData) {
-        super.init(init_data);
-        this.player = init_data.player;
-    }
 }
-
-
 
 // 创建一个Unit, 并返回它, 脚本总是这样创建Unit
 export function create_and_init<P extends { new (): { init(data: any): void } }>(UnitClassType: P, init_data: ExtractInitDataType<P>): InstanceType<P> {

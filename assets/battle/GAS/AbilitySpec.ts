@@ -2,28 +2,28 @@ import { AbilityInstance } from "./AbilityInstance";
 import { ITagName } from "./AbilitySystemComponent";
 import { Effect } from "./Effect";
 import { FailedReason, FailedReasonContainer, SimpleFailedReason } from "./FailedReason";
-import { Unit } from "./Unit";
+import { GAS_Node } from "./Unit";
 import { Vec2 } from "cc";
-import { AttrFormula, Attribute, AttributeManager, BaseAttribute, IAttributeHost, IAttributeManager } from "./属性";
+import { AttrFormula, Attribute, AttributeManager, BaseAttribute } from "./属性";
 import { GAS_Object, GAS_State } from "./State";
 import { World } from "./World";
 
 
 
 export interface AbilitySpecInitData {
-    owner: Unit;
+    owner: GAS_Node;
     attribute_manager?: AttributeManager;
 }
 
 
 
 @GAS_State
-export class AbilitySpec extends GAS_Object implements IAttributeHost {
+export class AbilitySpec extends GAS_Object {
     _attribute_manager: AttributeManager = undefined;
     get attribute_manager(): AttributeManager {
         return this._attribute_manager;
     }
-    owner: Unit = undefined;
+    owner: GAS_Node = undefined;
     running_ability_instance_list: AbilityInstance[] = [];
 
     init(init_data: AbilitySpecInitData) {

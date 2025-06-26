@@ -1,7 +1,6 @@
-import { assert } from "cc";
-import { Pawn, Player, Team} from "./Unit";
+import { GAS_Component, GAS_ComponentInitData, Pawn, Player, Team} from "./Unit";
 import { ExtractInitDataType, World } from "./World";
-import { GAS_State, GAS_Object, GAS_Map, GAS_SyncEventType, GAS_PRC_NotifyEvent, IGAS_Object } from "./State";
+import { GAS_State, GAS_Object, GAS_Map, GAS_SyncEventType, GAS_PRC_NotifyEvent } from "./State";
 import { GAS_Property } from "./State";
 
 export class AttrOperator {
@@ -24,31 +23,17 @@ export type type属性创建Factory = {
     formula?: AttrFormula;
 }
 
-export interface IAttributeHost {
-    get attribute_manager(): IAttributeManager;
-    get attribute_manager_inherit(): IAttributeHost;
-}
-
-export interface IAttributeManager {
-    create_object<T extends new (owner: GAS_Object, gas_id: number) => GAS_Object, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData): InstanceType<T>;
-    get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T;
-    world: World;
-    attached_host: IAttributeHost;
-    属性Map: Map<string, BaseAttribute>;
-}
-
-export interface AttributeManagerInitData {
- 
-    attached_host: IAttributeHost;
-}
+// export interface IAttributeManager {
+//     create_object<T extends new (owner: GAS_Object, gas_id: number) => GAS_Object, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData): InstanceType<T>;
+//     get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T;
+//     world: World;
+//     attached_host: IAttributeHost;
+//     属性Map: Map<string, BaseAttribute>;
+// }
 
 @GAS_State
-export class AttributeManager extends GAS_Object implements IAttributeManager {
-    init(init_data: AttributeManagerInitData) {
-        super.init(init_data);
-        this.attached_host = init_data.attached_host;
-    }
-
+export class AttributeManager extends GAS_Component {
+    
     get_attribute<T extends BaseAttribute>(name: string, create_if_not_exist?: boolean): T {
         let attr = this.属性Map.get(name);
         if(attr) {
@@ -63,10 +48,7 @@ export class AttributeManager extends GAS_Object implements IAttributeManager {
 
     world: World = undefined;
 
-    @GAS_Property({type: GAS_Object})
-    attached_host: IAttributeHost = undefined;
-
-    @GAS_Property({type: GAS_Map, own: true})
+    @GAS_Property({type: GAS_Map})
     属性Map: Map<string, BaseAttribute> = new Map();
 }
 
@@ -89,7 +71,7 @@ export class 属性预定义器 {
         throw new Error(`属性 ${name} 不存在`);
     }
 
-    创建(name: string, attr_mgr: IAttributeManager, base_value: number = undefined): Attribute {
+    创建(name: string, attr_mgr: AttributeManager, base_value: number = undefined): Attribute {
         let 工厂 = this.获取(name);
         if(工厂 === undefined) {
             工厂 = {
@@ -138,7 +120,7 @@ export interface BaseAttributeInitData {
 }
 
 export interface AttributeInitData extends BaseAttributeInitData {
-    attr_mgr: IAttributeManager;
+    attr_mgr: AttributeManager;
     name: string;
 }
 
@@ -233,25 +215,25 @@ export class BaseAttribute extends GAS_Object{
         // 从当前对象的订阅者数组中移除 obj
         if(this._dirty_subscriber_array !== undefined) {
             const index = this._dirty_subscriber_array.indexOf(obj);
-            assert(index !== -1, "unsubscribe_dirty_change: 在当前对象的订阅者数组中找不到目标对象");
+            // assert(index !== -1, "unsubscribe_dirty_change: 在当前对象的订阅者数组中找不到目标对象");
             this._dirty_subscriber_array.splice(index, 1);
             if(this._dirty_subscriber_array.length === 0) {
                 this._dirty_subscriber_array = undefined;
             }
         } else {
-            assert(false, "unsubscribe_dirty_change: 当前对象没有订阅者数组");
+            // assert(false, "unsubscribe_dirty_change: 当前对象没有订阅者数组");
         }
 
         // 从 obj 的发布者数组中移除当前对象
         if(obj._dirty_publisher_array !== undefined) {
             const index = obj._dirty_publisher_array.indexOf(this);
-            assert(index !== -1, "unsubscribe_dirty_change: 在目标对象的发布者数组中找不到当前对象");
+            // assert(index !== -1, "unsubscribe_dirty_change: 在目标对象的发布者数组中找不到当前对象");
             obj._dirty_publisher_array.splice(index, 1);
             if(obj._dirty_publisher_array.length === 0) {
                 obj._dirty_publisher_array = undefined;
             }
         } else {
-            assert(false, "unsubscribe_dirty_change: 目标对象没有发布者数组");
+            // assert(false, "unsubscribe_dirty_change: 目标对象没有发布者数组");
         }
     }
 
@@ -260,9 +242,9 @@ export class BaseAttribute extends GAS_Object{
         if(this._dirty_subscriber_array !== undefined) {
             for(let subscriber of [...this._dirty_subscriber_array]) {
                 // 从订阅者的发布者数组中移除当前对象
-                assert(subscriber._dirty_publisher_array !== undefined, "disconnect_all_dirty_pubsub: 订阅者没有发布者数组");
+                // assert(subscriber._dirty_publisher_array !== undefined, "disconnect_all_dirty_pubsub: 订阅者没有发布者数组");
                 const index = subscriber._dirty_publisher_array.indexOf(this);
-                assert(index !== -1, "disconnect_all_dirty_pubsub: 在订阅者的发布者数组中找不到当前对象");
+                // assert(index !== -1, "disconnect_all_dirty_pubsub: 在订阅者的发布者数组中找不到当前对象");
                 subscriber._dirty_publisher_array.splice(index, 1);
                 if(subscriber._dirty_publisher_array.length === 0) {
                     subscriber._dirty_publisher_array = undefined;
@@ -277,9 +259,9 @@ export class BaseAttribute extends GAS_Object{
         if(this._dirty_publisher_array !== undefined) {
             for(let publisher of [...this._dirty_publisher_array]) {
                 // 从发布者的订阅者数组中移除当前对象
-                assert(publisher._dirty_subscriber_array !== undefined, "disconnect_all_dirty_pubsub: 发布者没有订阅者数组");
+                // assert(publisher._dirty_subscriber_array !== undefined, "disconnect_all_dirty_pubsub: 发布者没有订阅者数组");
                 const index = publisher._dirty_subscriber_array.indexOf(this);
-                assert(index !== -1, "disconnect_all_dirty_pubsub: 在发布者的订阅者数组中找不到当前对象");
+                // assert(index !== -1, "disconnect_all_dirty_pubsub: 在发布者的订阅者数组中找不到当前对象");
                 publisher._dirty_subscriber_array.splice(index, 1);
                 if(publisher._dirty_subscriber_array.length === 0) {
                     publisher._dirty_subscriber_array = undefined;
@@ -316,7 +298,7 @@ export class BaseAttribute extends GAS_Object{
 }
 
 export class Attribute extends BaseAttribute{
-    attr_mgr: IAttributeManager = undefined;
+    attr_mgr: AttributeManager = undefined;
     protected _attr_operator_list?: AttrOperator[];
 
     name: string = undefined;
@@ -377,7 +359,7 @@ export class Attribute extends BaseAttribute{
                         mul_mul *= attr_operator.value.value();
                         break;
                     default:
-                        assert(false, `AttrOperatorType ${attr_operator.op} 未实现`);
+                        // assert(false, `AttrOperatorType ${attr_operator.op} 未实现`);
                 }
                 this.subscribe_dirty_change(attr_operator.value);
             }
@@ -389,11 +371,11 @@ export class Attribute extends BaseAttribute{
     calc_inherit(source_collection?: AttrSourceCollection): AttrFomulaResult {
     
         const ret: AttrFomulaResult = [0, 0, 1];
-        const attached_any = this.attr_mgr.attached_host;
+        const attached_any = this.attr_mgr.owner;
         if(attached_any){
             if(attached_any instanceof Pawn){
-                if(attached_any.player){
-                    const player_attr = attached_any.player.asc.get_attribute(this.name);
+                if(attached_any.owner_player){
+                    const player_attr = attached_any.owner_player.asc.get_attribute(this.name);
                     if(player_attr instanceof Attribute){
                         const r = player_attr.cached_result();
                         ret[0] += r[0];
@@ -418,7 +400,7 @@ export class Attribute extends BaseAttribute{
                     this.subscribe_dirty_change(team_attr);
                 }
             }else if(attached_any instanceof Team){
-                if(attached_any.asc.world){
+                if(attached_any.world){
                     const world_attr = attached_any.asc.world.asc.get_attribute(this.name);
                     if(world_attr instanceof Attribute){
                         const r = world_attr.cached_result();
@@ -504,7 +486,7 @@ export class Attribute extends BaseAttribute{
                 this._base_value = attr_operator.value.value();
                 break;
             default:
-                assert(false, `use_attr_operator_immediately: 属性操作符类型 ${attr_operator.op} 未实现`);
+                // assert(false, `use_attr_operator_immediately: 属性操作符类型 ${attr_operator.op} 未实现`);
         }
         this.to_dirty(true);
     }
@@ -519,7 +501,7 @@ export class Attribute extends BaseAttribute{
 
     remove_attr_operator(attr_operator: AttrOperator): void {
         if(this._attr_operator_list === undefined) {
-            assert(false, "remove_attr_operator: 当前对象没有属性操作符列表");
+            // assert(false, "remove_attr_operator: 当前对象没有属性操作符列表");
             return;
         }
         this._attr_operator_list = this._attr_operator_list.filter(elem => elem !== attr_operator);

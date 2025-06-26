@@ -1,29 +1,33 @@
 import { ExtractInitDataType, World, WorldRole } from "./World";
-import { Player, Unit } from "./Unit";
+import { Player, GAS_Node } from "./Unit";
 
 
 
 
 export interface IGAS_Object {
-    world: World;
-    gas_id: number;
+    readonly world: World;
+    readonly gas_id: number;
     get valid(): boolean;
     owner: GAS_Object;
     owner_player: Player;
 
-    role: WorldRole;
+    readonly role: WorldRole;
 
     syncGASState(): void;
+
+    destory?(): void;
+    _destory?(): void;
     
     /**
      * 类元数据访问器 (只有被@GAS_State装饰的类才有)
      */
     readonly CLASS_META?: {
+        readonly state_meta: GAS_State_Meta;
         readonly gas_property_names: string[];
-        readonly gas_property_metadata: Map<string, GAS_Property_Meta_Input>;
-        readonly gas_ordered_properties: { propName: string; meta: GAS_Property_Meta_Input }[];
+        readonly gas_property_metadata: Map<string, GAS_Property_Meta>;
+        readonly gas_ordered_properties: { propName: string; meta: GAS_Property_Meta }[];
         
-        getProperty(name: string): Readonly<GAS_Property_Meta_Input> | undefined;
+        getProperty(name: string): Readonly<GAS_Property_Meta> | undefined;
         hasProperty(name: string): boolean;
         readonly propertyCount: number;
         readonly isGASClass: boolean;
@@ -56,8 +60,9 @@ export class GAS_Object implements IGAS_Object {
 
     syncGASState() {}
 
-    @GAS_Property({type: GAS_Object, own: false})
-    owner: GAS_Object;
+    @GAS_Property({type: GAS_Object, ref: true})
+    owner: GAS_Object = undefined;
+
     get owner_player(): Player {
         return this.owner.owner_player;
     }
@@ -67,7 +72,7 @@ export class GAS_Object implements IGAS_Object {
     }
 
     constructor(owner: GAS_Object, gas_id: number) {
-        this.gas_id = gas_id;
+        this.gas_id = gas_id?? owner.world.apply_id();
         this.owner = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
@@ -77,10 +82,17 @@ export class GAS_Object implements IGAS_Object {
 
     }
 
+    event_init_finish(): void {
+
+    }
+
     create_object<T extends new (owner: GAS_Object, gas_id: number) => GAS_Object, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData, owner?: GAS_Object): InstanceType<T> {
         const obj = new ObjectClass(owner?? this.owner, this.world.apply_id());  // add_id_state会自动在ObjectClass的构造函数里调用
         obj.syncGASState();
         obj.init(init_data);
+        if(owner.role == WorldRole.Server){
+            obj.rpc_notify("event_init_finish");
+        }
         return obj as InstanceType<T>;
     }
 
@@ -124,7 +136,15 @@ export class GAS_Object implements IGAS_Object {
         this.world.syncer.on_self_state_changed(event);
     }
 
-    
+    _destory(): void{
+
+    }
+
+    destory(): void {
+        this._destory();
+        this.world.remove_id_state(this);
+        this.world.rpc_notify("_GAS_destory");
+    }
 }
 
 // /**
@@ -156,7 +176,7 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
 
     constructor(owner: GAS_Object, gas_id: number) {
         super();
-        this.gas_id = gas_id;
+        this.gas_id = gas_id?? owner.world.apply_id();
         this.owner = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
@@ -180,7 +200,7 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
                 const event: GAS_PropertyChangedEvent = {
                     type: GAS_SyncEventType.PropertyChanged,
                     target: this,
-                    propertyName: key as string,
+                    propertyName: key,
                     op: GAS_PropertyChangedEventOperatorType.SET,
                     newValue: value
                 };
@@ -201,9 +221,8 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
                 const event: GAS_PropertyChangedEvent = {
                     type: GAS_SyncEventType.PropertyChanged,
                     target: this,
-                    propertyName: key as string,
+                    propertyName: key,
                     op: GAS_PropertyChangedEventOperatorType.REMOVE,
-                    newValue: undefined
                 };
                 world.syncer.on_self_state_changed(event);
             }
@@ -230,7 +249,7 @@ export class GAS_Set<T> extends Set<T> implements IGAS_Object {
 
     constructor(owner: GAS_Object, gas_id: number) {
         super();
-        this.gas_id = gas_id;
+        this.gas_id = gas_id?? owner.world.apply_id();
         this.owner = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
@@ -247,6 +266,7 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
     world: World;
     gas_id: number;
     owner: GAS_Object;
+    private _gas_sync_enabled = false;
 
     get role(): WorldRole {
         return this.world.role;
@@ -258,14 +278,29 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
 
     constructor(owner: GAS_Object, gas_id: number) {
         super();
-        this.gas_id = gas_id;
+        this.gas_id = gas_id?? owner.world.apply_id();
         this.owner = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
     }
 
     set(index: number, value: T) {
+        const old_value = this[index];
         this[index] = value;
+
+        if (this._gas_sync_enabled && old_value !== value) {
+            const world = this.world;
+            if (world) {
+                const event: GAS_PropertyChangedEvent = {
+                    type: GAS_SyncEventType.PropertyChanged,
+                    target: this,
+                    propertyName: index,
+                    op: GAS_PropertyChangedEventOperatorType.SET,
+                    newValue: value
+                };
+                world.syncer.on_self_state_changed(event);
+            }
+        }
     }
 
     at(index: number) {
@@ -276,7 +311,113 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
         return this.world.is_ref_valid(this);
     }
 
-    syncGASState() {}
+    syncGASState(): void {
+        if (this._gas_sync_enabled) {
+            return;
+        }
+        this._gas_sync_enabled = true;
+
+        const world: World = this.world;
+        if (!world) {
+            return;
+        }
+
+        const event: GAS_FullSyncEvent = {
+            type: GAS_SyncEventType.FULL_SYNC,
+            target: this,
+        };
+        world.syncer.on_self_state_changed(event);
+    }
+
+    push(...items: T[]): number {
+        const start_index = this.length;
+        const result = super.push(...items);
+        if (this._gas_sync_enabled && items.length > 0) {
+            const world = this.world;
+            const event: GAS_PropertyChangedEvent = {
+                type: GAS_SyncEventType.PropertyChanged,
+                target: this,
+                op: GAS_PropertyChangedEventOperatorType.SPLICE,
+                propertyName: start_index,
+                deleteCount: 0,
+                inserted: items,
+            };
+            world.syncer.on_self_state_changed(event);
+        }
+        return result;
+    }
+
+    pop(): T | undefined {
+        const had_items = this.length > 0;
+        const result = super.pop();
+        if (this._gas_sync_enabled && had_items) {
+            const world = this.world;
+            const event: GAS_PropertyChangedEvent = {
+                type: GAS_SyncEventType.PropertyChanged,
+                target: this,
+                op: GAS_PropertyChangedEventOperatorType.SPLICE,
+                propertyName: this.length,
+                deleteCount: 1,
+                inserted: [],
+            };
+            world.syncer.on_self_state_changed(event);
+        }
+        return result;
+    }
+
+    splice(start: number, deleteCount?: number, ...items: T[]): T[] {
+        const actual_delete_count = deleteCount === undefined ? this.length - start : deleteCount;
+        const result = super.splice(start, deleteCount, ...items);
+
+        if (this._gas_sync_enabled && (actual_delete_count > 0 || items.length > 0)) {
+            const world = this.world;
+            const event: GAS_PropertyChangedEvent = {
+                type: GAS_SyncEventType.PropertyChanged,
+                target: this,
+                op: GAS_PropertyChangedEventOperatorType.SPLICE,
+                propertyName: start,
+                deleteCount: actual_delete_count,
+                inserted: items,
+            };
+            world.syncer.on_self_state_changed(event);
+        }
+        return result;
+    }
+
+    shift(): T | undefined {
+        const had_items = this.length > 0;
+        const result = super.shift();
+        if (this._gas_sync_enabled && had_items) {
+            const world = this.world;
+            const event: GAS_PropertyChangedEvent = {
+                type: GAS_SyncEventType.PropertyChanged,
+                target: this,
+                op: GAS_PropertyChangedEventOperatorType.SPLICE,
+                propertyName: 0,
+                deleteCount: 1,
+                inserted: [],
+            };
+            world.syncer.on_self_state_changed(event);
+        }
+        return result;
+    }
+
+    unshift(...items: T[]): number {
+        const result = super.unshift(...items);
+        if (this._gas_sync_enabled && items.length > 0) {
+            const world = this.world;
+            const event: GAS_PropertyChangedEvent = {
+                type: GAS_SyncEventType.PropertyChanged,
+                target: this,
+                op: GAS_PropertyChangedEventOperatorType.SPLICE,
+                propertyName: 0,
+                deleteCount: 0,
+                inserted: items,
+            };
+            world.syncer.on_self_state_changed(event);
+        }
+        return result;
+    }
 }
 
 export type GAS_StateValue = (new (...args: any[]) => IGAS_Object) | NumberConstructor | StringConstructor | BooleanConstructor;
@@ -287,7 +428,8 @@ export type GAS_StateValue = (new (...args: any[]) => IGAS_Object) | NumberConst
  */
 export interface GAS_Property_Meta_Input {
     type: GAS_StateValue;
-    own?: boolean;
+    extra_types?: GAS_StateValue[];
+    ref?: boolean;
 }
 
 export interface GAS_Property_Meta extends GAS_Property_Meta_Input {
@@ -337,9 +479,11 @@ export interface GAS_CustomEvent extends GAS_SyncEvent {
 export interface GAS_PropertyChangedEvent extends GAS_SyncEvent {
     type: GAS_SyncEventType.PropertyChanged;
     target: IGAS_Object;
-    propertyName?: string|number;
+    propertyName?: any;
     op?: GAS_PropertyChangedEventOperatorType;  // 操作类型，默认为SET
     newValue?: any;
+    deleteCount?: number;
+    inserted?: any[];
 }
 
 export interface GAS_CreateStateEvent extends GAS_SyncEvent {
@@ -404,14 +548,6 @@ export function GAS_Property<T extends IGAS_Object>(property_meta_input: GAS_Pro
             property_meta_input = {type: property_meta_input};
         }
 
-        if(property_meta_input.own === undefined){
-            if([Number, String, Boolean].indexOf(property_meta_input.type as any) != -1){
-                property_meta_input.own = true;
-            }else{
-                property_meta_input.own = false;
-            }
-        }
-
         // 创建新的、完整的元数据对象，而不是修改输入的对象
         const property_meta: GAS_Property_Meta = {
             ...property_meta_input,
@@ -462,112 +598,164 @@ export function GAS_Property<T extends IGAS_Object>(property_meta_input: GAS_Pro
     }
 }
 
+export interface GAS_PropertyMap_Meta_Input {
+    map_type?: typeof GAS_Map;
+    key_type: GAS_StateValue;
+    value_type: GAS_StateValue;
+    ref?: boolean;
+}
+
+export function GAS_PropertyMap<T extends IGAS_Object>(property_meta_input: GAS_PropertyMap_Meta_Input): (target: T, propertyName: string) => void {
+    const input: GAS_Property_Meta_Input = {
+        type: property_meta_input.map_type?? GAS_Map,
+        extra_types: [property_meta_input.key_type, property_meta_input.value_type],
+        ref: property_meta_input.ref,
+    }
+    return GAS_Property(input);
+}
+
+export interface GAS_PropertyArray_Meta_Input {
+    array_type?: typeof GAS_Array;
+    item_type: GAS_StateValue;
+    ref?: boolean;
+}
+
+export function GAS_PropertyArray<T extends IGAS_Object>(property_meta_input: GAS_PropertyArray_Meta_Input): (target: T, propertyName: string) => void {
+    const input: GAS_Property_Meta_Input = {
+        type: property_meta_input.array_type?? GAS_Array,
+        extra_types: [property_meta_input.item_type],
+        ref: property_meta_input.ref,
+    }
+    return GAS_Property(input);
+}
+
+
+
+export interface GAS_State_Meta_Input {
+    client_class_name?: string;
+}
+
+export interface GAS_State_Meta extends GAS_State_Meta_Input {
+
+}
+
 /**
  * @GAS_State 装饰器
  */
-export function GAS_State<T extends new (...args: any[]) => IGAS_Object>(constructor: T): T {
-    // --- 预收集和排序逻辑 ---
-    const orderedProperties: { propName: string; meta: GAS_Property_Meta }[] = [];
-    const seenProperties = new Set<string>();
-    const prototypeChain: any[] = [];
-    
-    let currentProto = constructor.prototype;
-    while (currentProto && currentProto !== Object.prototype) {
-        prototypeChain.unshift(currentProto); // Parent -> Child order
-        currentProto = Object.getPrototypeOf(currentProto);
-    }
+export function GAS_State(arg1?: GAS_State_Meta_Input | (new (...args: any[]) => IGAS_Object)): any {
+    const decorator = function <T extends new (...args: any[]) => IGAS_Object>(constructor: T, state_meta_input?: GAS_State_Meta_Input): T {
+        const state_meta: GAS_State_Meta = { ...state_meta_input };
 
-    // 1. 先合并所有元数据，子类会覆盖父类的
-    const finalMetaMap = new Map<string, any>();
-    for (const proto of prototypeChain) {
-        const ctor = proto.constructor;
-        const metaOnThisLevel = propertyMetadataRegistry.get(ctor);
-        if (metaOnThisLevel) {
-            for (const [propName, meta] of metaOnThisLevel.entries()) {
-                finalMetaMap.set(propName, meta);
-            }
+        // --- 预收集和排序逻辑 ---
+        const orderedProperties: { propName: string; meta: GAS_Property_Meta }[] = [];
+        const seenProperties = new Set<string>();
+        const prototypeChain: any[] = [];
+        
+        let currentProto = constructor.prototype;
+        while (currentProto && currentProto !== Object.prototype) {
+            prototypeChain.unshift(currentProto); // Parent -> Child order
+            currentProto = Object.getPrototypeOf(currentProto);
         }
-    }
 
-    // 2. 按照父->子顺序，构建最终的有序列表
-    for (const proto of prototypeChain) {
-        const ctor = proto.constructor;
-        const propsOnThisLevel = propertyNamesRegistry.get(ctor) || [];
-        for (const propName of propsOnThisLevel) {
-            if (!seenProperties.has(propName)) {
-                // 使用在第一步中已经合并好的、子类优先的元数据
-                const finalMeta = finalMetaMap.get(propName);
-                if (finalMeta) { // 确保元数据存在
-                    orderedProperties.push({ propName: propName, meta: finalMeta });
+        // 1. 先合并所有元数据，子类会覆盖父类的
+        const finalMetaMap = new Map<string, GAS_Property_Meta>();
+        for (const proto of prototypeChain) {
+            const ctor = proto.constructor;
+            const metaOnThisLevel = propertyMetadataRegistry.get(ctor);
+            if (metaOnThisLevel) {
+                for (const [propName, meta] of metaOnThisLevel.entries()) {
+                    finalMetaMap.set(propName, meta);
                 }
-                seenProperties.add(propName);
             }
         }
+
+        // 2. 按照父->子顺序，构建最终的有序列表
+        for (const proto of prototypeChain) {
+            const ctor = proto.constructor;
+            const propsOnThisLevel = propertyNamesRegistry.get(ctor) || [];
+            for (const propName of propsOnThisLevel) {
+                if (!seenProperties.has(propName)) {
+                    // 使用在第一步中已经合并好的、子类优先的元数据
+                    const finalMeta = finalMetaMap.get(propName);
+                    if (finalMeta) { // 确保元数据存在
+                        orderedProperties.push({ propName: propName, meta: finalMeta });
+                    }
+                    seenProperties.add(propName);
+                }
+            }
+        }
+        
+        // --- 预收集结束 ---
+
+        // 创建CLASS_META对象
+        const classMeta = {
+            state_meta,
+            gas_property_names: Array.from(seenProperties),
+            gas_property_metadata: finalMetaMap,
+            gas_ordered_properties: orderedProperties,
+            
+            // 便捷方法
+            getProperty(name: string) {
+                return classMeta.gas_property_metadata.get(name);
+            },
+            
+            hasProperty(name: string) {
+                return classMeta.gas_property_metadata.has(name);
+            },
+            
+            get propertyCount() {
+                return classMeta.gas_property_names.length;
+            },
+            
+            get isGASClass() {
+                return classMeta.gas_property_names.length > 0;
+            }
+        };
+
+        const WrappedClass = class extends (constructor as any) {
+            private _gas_sync_enabled = false;
+
+            // 类元数据访问器 - 返回预创建的闭包
+            get CLASS_META() {
+                return classMeta;
+            }
+
+            // constructor(...args: any[]) {
+            //     super(...args);
+            // }
+            
+            /**
+             * 首次调用时，会同步所有预收集的GAS属性，并开启后续的自动变更通知。
+             */
+            public syncGASState(): void {
+                if (!this._gas_sync_enabled) {
+                    this._gas_sync_enabled = true;
+                }
+
+                const world: World = this.world;
+                if (!world) {
+                    return;
+                }
+                
+                // 从CLASS_META获取属性列表
+                const propertiesToSync = this.CLASS_META.gas_ordered_properties;
+                
+                if (propertiesToSync && propertiesToSync.length > 0) {
+                    const event: GAS_FullSyncEvent = {
+                        type: GAS_SyncEventType.FULL_SYNC,
+                        target: this as any as IGAS_Object,
+                    };
+                    world.syncer.on_self_state_changed(event);
+                }
+            }
+        };
+
+        return WrappedClass as unknown as T;
+    };
+
+    if (typeof arg1 === 'function') {
+        return decorator(arg1 as any);
     }
-    
-    // --- 预收集结束 ---
 
-    // 创建CLASS_META对象
-    const classMeta = {
-        gas_property_names: Array.from(seenProperties),
-        gas_property_metadata: finalMetaMap,
-        gas_ordered_properties: orderedProperties,
-        
-        // 便捷方法
-        getProperty(name: string) {
-            return classMeta.gas_property_metadata.get(name);
-        },
-        
-        hasProperty(name: string) {
-            return classMeta.gas_property_metadata.has(name);
-        },
-        
-        get propertyCount() {
-            return classMeta.gas_property_names.length;
-        },
-        
-        get isGASClass() {
-            return classMeta.gas_property_names.length > 0;
-        }
-    };
-
-    const WrappedClass = class extends (constructor as any) {
-        private _gas_sync_enabled = false;
-
-        // 类元数据访问器 - 返回预创建的闭包
-        get CLASS_META() {
-            return classMeta;
-        }
-
-        // constructor(...args: any[]) {
-        //     super(...args);
-        // }
-        
-        /**
-         * 首次调用时，会同步所有预收集的GAS属性，并开启后续的自动变更通知。
-         */
-        public syncGASState(): void {
-            if (!this._gas_sync_enabled) {
-                this._gas_sync_enabled = true;
-            }
-
-            const world: World = this.world;
-            if (!world) {
-                return;
-            }
-            
-            // 从CLASS_META获取属性列表
-            const propertiesToSync = this.CLASS_META.gas_ordered_properties;
-            
-            if (propertiesToSync && propertiesToSync.length > 0) {
-                const event: GAS_FullSyncEvent = {
-                    type: GAS_SyncEventType.FULL_SYNC,
-                    target: this as any as IGAS_Object,
-                };
-                world.syncer.on_self_state_changed(event);
-            }
-        }
-    };
-
-    return WrappedClass as unknown as T;
+    return <T extends new (...args: any[]) => IGAS_Object>(constructor: T) => decorator(constructor, arg1);
 }

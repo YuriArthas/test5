@@ -6,7 +6,7 @@ import { Attribute, AttrFomulaResult, AttrSourceCollection, BaseAttribute } from
 import resourceManager from './ResourceManager';
 import { 牌, 牌可拖到Layer, 牌状态 } from './牌';
 import { ASC } from './GAS/AbilitySystemComponent';
-import { Player, Team, Pawn, UnitInitData, create_and_init, Unit } from './GAS/Unit';
+import { Player, Team, Pawn, UnitInitData, create_and_init, GAS_Node } from './GAS/Unit';
 import { World } from './GAS/World';
 import { 可被拖到Component } from './可被拖到Component';
 import { DragEndBehavior, 可拖动Component } from './可拖动Component';
@@ -14,7 +14,7 @@ import { BaseCharacter, BaseCharacterInitData } from './pawns/BaseCharacter';
 const { ccclass, property } = _decorator;
 
 export class AbilityTarget {
-    target: Unit|Vec2|undefined|any = undefined;
+    target: GAS_Node|Vec2|undefined|any = undefined;
 }
 
 export enum AbilityTargetType {

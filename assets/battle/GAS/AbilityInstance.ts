@@ -3,7 +3,7 @@ import { ASC } from "./AbilitySystemComponent";
 import { AbilitySpec } from "./AbilitySpec";
 import { Effect } from "./Effect";
 import { FailedReasonContainer } from "./FailedReason";
-import { Unit, UnitInitData } from "./Unit";
+import { GAS_Node, UnitInitData } from "./Unit";
 import { GAS_State, GAS_Object, IGAS_Object } from "./State";
 import { IAttributeHost, IAttributeManager, AttributeManager } from "./属性";
 import { World } from "./World";
@@ -11,7 +11,7 @@ import { World } from "./World";
 const { ccclass, property } = _decorator;
 
 export interface AbilityInstanceInitData {
-    caster: Unit;
+    caster: GAS_Node;
     target: any;
     ability_spec: AbilitySpec;
     to_check_effects?: Effect[];
@@ -20,7 +20,7 @@ export interface AbilityInstanceInitData {
 @GAS_State
 export class AbilityInstance extends GAS_Object implements IAttributeHost{
     _attribute_manager: AttributeManager = undefined;
-    caster: Unit;  // ability_spec.caster和caster可能不是同一个
+    caster: GAS_Node;  // ability_spec.caster和caster可能不是同一个
     target: any;
     ability_spec: AbilitySpec = undefined;
     to_check_effects: Effect[];
