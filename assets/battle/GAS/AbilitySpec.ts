@@ -73,7 +73,7 @@ export class AbilitySpec extends GAS_Object {
         const blocked_tags = this.blocked_tags();
         if(blocked_tags) {
             for(let tag of blocked_tags) {
-                if(this.node.asc.owned_tags.has(tag)) {
+                if(this.asc.owned_tags.has(tag)) {
                     if (reason) {
                         reason.value = new SimpleFailedReason("Blocked tag found: " + tag);
                     }

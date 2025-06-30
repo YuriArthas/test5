@@ -5,7 +5,7 @@ import { GAS_Component, GAS_Node} from './Unit';
 import type { World } from './World';
 import { AbilitySpec } from './AbilitySpec';
 import { AbilityInstance } from './AbilityInstance';
-import { GAS_Array, GAS_Map, GAS_Object, GAS_Property, GAS_Property_Array, GAS_Property_Ref, GAS_State } from './State';
+import { GAS_Array, GAS_Map, GAS_Object, GAS_Property, GAS_Property_Array, GAS_Ref, GAS_State } from './State';
 const { ccclass, property } = _decorator;
 
 export interface ITagName {
@@ -116,9 +116,9 @@ export class ASC extends GAS_Component{
     running_ability_instance_list: AbilityInstance[];
 
     @GAS_Property_Array({item_type: AbilitySpec})
-    ability_spec_list: AbilitySpec[] = [];
+    ability_spec_list: GAS_Array<AbilitySpec> = undefined;
     
-    @GAS_Property_Ref({type: AttributeManager})
+    @GAS_Ref({type: AttributeManager})
     attribute_manager: AttributeManager = undefined;
 
     constructor(world: World, gas_id: number) {
@@ -133,7 +133,7 @@ export class ASC extends GAS_Component{
 
     onLoad() {
         super.onLoad();
-        this.attribute_manager = this.node.get_component(AttributeManager);
+        this.attribute_manager = this.owner.get_component(AttributeManager);
     }
 
     cast_ability(){

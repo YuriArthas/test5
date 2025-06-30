@@ -64,7 +64,6 @@ export class World extends Unit {
         super(trick_owner as GAS_Object, gas_id);
         // trick之后, 设置正确的owner和world
         this.world = this;
-        this.node = this;
     }
 
     static create_world<T extends new (trick_owner: GAS_Object, gas_id: number) => World, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData): InstanceType<T> {
@@ -87,7 +86,7 @@ export class World extends Unit {
         super.init(init_data);
         this._role = init_data.role;
 
-        this.player_map = this.create_map(this);
+        this.player_map = this.create_map();
         this.player_map.set(this.player_0.player_id, this.player_0);
 
         this.team_0 = this.create_object(Team, {team_id: 0});

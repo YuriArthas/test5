@@ -368,7 +368,7 @@ export class Attribute extends BaseAttribute{
     calc_inherit(source_collection?: AttrSourceCollection): AttrFomulaResult {
     
         const ret: AttrFomulaResult = [0, 0, 1];
-        const attached_any = this.attr_mgr.node;
+        const attached_any = this.attr_mgr.owner;
         if(attached_any){
             if(attached_any instanceof Pawn){
                 if(attached_any.owner_player){

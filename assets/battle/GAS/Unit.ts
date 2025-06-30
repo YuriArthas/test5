@@ -1,7 +1,7 @@
 import { ASC } from "./AbilitySystemComponent";
 import { WorldRole } from "./World";
 import { AttributeManager} from "./属性";
-import { GAS_State, GAS_Object, GAS_Property, GAS_Array, GAS_Property_Ref } from "./State";
+import { GAS_State, GAS_Object, GAS_Property, GAS_Array, GAS_Ref } from "./State";
 import { ExtractInitDataType } from "./World";
 
 
@@ -27,7 +27,7 @@ export class GAS_Node extends GAS_Object {
     @GAS_Property({type: GAS_Array})
     private _components: GAS_Component[] = [];
 
-    @GAS_Property({type: GAS_Node, ref: true})
+    @GAS_Ref({type: GAS_Node})
     parent: GAS_Node = undefined;
 
     @GAS_Property({type: GAS_Array})
@@ -46,7 +46,7 @@ export class GAS_Node extends GAS_Object {
     }
 
     add_component<T extends GAS_Component & { init(data: any): void }>(ComponentType: new (...any: any[]) => T, init_data: ExtractInitDataType<typeof ComponentType>): T {
-        const component = this.create_object(ComponentType, init_data, this);
+        const component = this.create_object(ComponentType, init_data);
         this._components.push(component);
         
         if (this.world.role & WorldRole.Server) {
@@ -350,8 +350,13 @@ export class GAS_Component extends GAS_Object {
     @GAS_Property({type: Boolean})
     private _hasStarted: boolean = false;
 
-    @GAS_Property_Ref({type: GAS_Node})
-    node: GAS_Node = undefined;
+    @GAS_Property({type: GAS_Node, ref: true})
+    owner: GAS_Node = undefined;
+
+    constructor(owner: GAS_Node, gas_id: number) {
+        super(owner, gas_id);
+        this.owner = owner;
+    }
 
     init(init_data: GAS_ComponentInitData) {
 
@@ -411,7 +416,7 @@ export class GAS_Component extends GAS_Object {
 
     _internal_onDestroy() {
         this.onDestroy();
-        this.node = undefined;
+        this.owner = undefined;
     }
 
     protected onDestroy() {
@@ -442,10 +447,10 @@ export class GAS_Component extends GAS_Object {
 }
 
 export class Unit extends GAS_Node {
-    @GAS_Property_Ref({type: ASC})
+    @GAS_Ref({type: ASC})
     asc: ASC = undefined;
 
-    @GAS_Property_Ref({type: AttributeManager})
+    @GAS_Ref({type: AttributeManager})
     attribute_manager: AttributeManager = undefined;
 
     init_asc(): ASC {

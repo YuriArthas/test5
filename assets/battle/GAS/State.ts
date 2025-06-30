@@ -2,13 +2,32 @@ import { ExtractInitDataType, World, WorldRole } from "./World";
 import { Player, GAS_Node } from "./Unit";
 
 
+export enum GAS_Visible_Police {
+    None = 0,
+    Owner = 1,
+    Allies = 2,
+    Enemies = 4,
+    All = Owner | Allies | Enemies,
+}
 
+export interface IGAS_Class_Meta {
+    readonly state_meta: GAS_State_Meta;
+    readonly gas_property_names: string[];
+    readonly gas_property_metadata: Map<string, GAS_Property_Meta>;
+    readonly gas_ordered_properties: { propName: string; meta: GAS_Property_Meta }[];
+    
+    getProperty(name: string): Readonly<GAS_Property_Meta> | undefined;
+    hasProperty(name: string): boolean;
+    readonly propertyCount: number;
+    readonly isGASClass: boolean;
+    readonly class_visible_police: GAS_Visible_Police;
+}
 
 export interface IGAS_Object {
     readonly world: World;
     readonly gas_id: number;
     get valid(): boolean;
-    node: GAS_Object;
+    owner: GAS_Object;
     owner_player: Player;
 
     readonly role: WorldRole;
@@ -17,21 +36,13 @@ export interface IGAS_Object {
 
     destory?(): void;
     _destory?(): void;
+
+    visible_police: GAS_Visible_Police;
     
     /**
      * 类元数据访问器 (只有被@GAS_State装饰的类才有)
      */
-    readonly CLASS_META?: {
-        readonly state_meta: GAS_State_Meta;
-        readonly gas_property_names: string[];
-        readonly gas_property_metadata: Map<string, GAS_Property_Meta>;
-        readonly gas_ordered_properties: { propName: string; meta: GAS_Property_Meta }[];
-        
-        getProperty(name: string): Readonly<GAS_Property_Meta> | undefined;
-        hasProperty(name: string): boolean;
-        readonly propertyCount: number;
-        readonly isGASClass: boolean;
-    };
+    readonly CLASS_META: IGAS_Class_Meta;
 }
 
 
@@ -60,20 +71,27 @@ export class GAS_Object implements IGAS_Object {
 
     syncGASState() {}
 
-    @GAS_Property({type: GAS_Object, ref: true})
-    node: GAS_Object = undefined;
+    get visible_police(): GAS_Visible_Police {
+        return this.CLASS_META.class_visible_police & this.local_visible_police;
+    }
+
+    local_visible_police: GAS_Visible_Police = GAS_Visible_Police.All;
 
     get owner_player(): Player {
-        return this.node.owner_player;
+        return this.world.owner_player;
     }
+
+    owner: GAS_Object;
 
     get valid(): boolean {
         return this.world.is_ref_valid(this);
     }
 
+    get CLASS_META(): IGAS_Class_Meta {return undefined;}  // 将使用GAS_State装饰器来设置CLASS_META
+
     constructor(owner: GAS_Object, gas_id: number) {
         this.gas_id = gas_id?? owner.world.apply_id();
-        this.node = owner;
+        this.owner = owner;
         this.world = owner.world;
         this.world.add_id_state(this, true);
     }
@@ -86,30 +104,30 @@ export class GAS_Object implements IGAS_Object {
 
     }
 
-    create_object<T extends new (owner: GAS_Object, gas_id: number) => GAS_Object, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData, owner?: GAS_Object): InstanceType<T> {
-        const obj = new ObjectClass(owner?? this.node, this.world.apply_id());  // add_id_state会自动在ObjectClass的构造函数里调用
+    create_object<T extends new (owner: GAS_Object, gas_id: number) => GAS_Object, InitData extends ExtractInitDataType<T>>(ObjectClass: T, init_data: InitData): InstanceType<T> {
+        const obj = new ObjectClass(this, this.world.apply_id());  // add_id_state会自动在ObjectClass的构造函数里调用
         obj.syncGASState();
         obj.init(init_data);
-        if(owner.role == WorldRole.Server){
+        if(this.role == WorldRole.Server){
             obj.rpc_notify("event_init_finish");
         }
         return obj as InstanceType<T>;
     }
 
-    create_map<K, V>(owner?: GAS_Object): GAS_Map<K, V> {
-        const map = new GAS_Map<K, V>(owner?? this.node, this.world.apply_id());
+    create_map<K, V>(): GAS_Map<K, V> {
+        const map = new GAS_Map<K, V>(this, this.world.apply_id());
         map.syncGASState();
         return map;
     }
 
-    create_set<T>(owner?: GAS_Object): GAS_Set<T> {
-        const set = new GAS_Set<T>(owner?? this.node, this.world.apply_id());
+    create_set<T>(): GAS_Set<T> {
+        const set = new GAS_Set<T>(this, this.world.apply_id());
         set.syncGASState();
         return set;
     }
 
-    create_array<T>(owner?: GAS_Object): GAS_Array<T> {
-        const array = new GAS_Array<T>(owner?? this.node, this.world.apply_id());
+    create_array<T>(): GAS_Array<T> {
+        const array = new GAS_Array<T>(this, this.world.apply_id());
         array.syncGASState();
         return array;
     }
@@ -157,29 +175,14 @@ export class GAS_Object implements IGAS_Object {
 
 export type GAS_Map_Init_Data<K, V> = readonly (readonly [K, V])[];
 
-export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
-    world: World;
-    gas_id: number;
+@GAS_State
+export class GAS_Map<K, V> extends GAS_Object {
+    private map: Map<K, V>;
     private _gas_sync_enabled = false;
-    node: GAS_Object;
-    get owner_player(): Player {
-        return this.node.owner_player;
-    }
-
-    get role(): WorldRole {
-        return this.world.role;
-    }
-    
-    get valid(): boolean {
-        return this.world.is_ref_valid(this);
-    }
 
     constructor(owner: GAS_Object, gas_id: number) {
-        super();
-        this.gas_id = gas_id?? owner.world.apply_id();
-        this.node = owner;
-        this.world = owner.world;
-        this.world.add_id_state(this, true);
+        super(owner, gas_id);
+        this.map = new Map<K,V>();
     }
 
     init(init_data?: GAS_Map_Init_Data<K, V>) {
@@ -191,8 +194,8 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
     }
 
     set(key: K, value: V): this {
-        const oldValue = this.get(key);
-        const result = super.set(key, value);
+        const oldValue = this.map.get(key);
+        this.map.set(key, value);
         
         if (this._gas_sync_enabled && oldValue !== value) {
             const world = this.world;
@@ -208,12 +211,12 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
             }
         }
         
-        return result;
+        return this;
     }
 
     delete(key: K): boolean {
-        const had = this.has(key);
-        const result = super.delete(key);
+        const had = this.map.has(key);
+        const result = this.map.delete(key);
         
         if (this._gas_sync_enabled && had) {
             const world = this.world;
@@ -231,62 +234,202 @@ export class GAS_Map<K, V> extends Map<K, V> implements IGAS_Object {
         return result;
     }
 
-    syncGASState() {}
+    public syncGASState(): void {
+        if (this._gas_sync_enabled) {
+            return;
+        }
+        this._gas_sync_enabled = true;
+
+        const world: World = this.world;
+        if (!world) {
+            return;
+        }
+
+        const event: GAS_FullSyncEvent = {
+            type: GAS_SyncEventType.FULL_SYNC,
+            target: this,
+        };
+        world.syncer.on_self_state_changed(event);
+    }
+    
+    get(key: K): V | undefined {
+        return this.map.get(key);
+    }
+
+    has(key: K): boolean {
+        return this.map.has(key);
+    }
+
+    clear(): void {
+        const hadItems = this.map.size > 0;
+        this.map.clear();
+        if (this._gas_sync_enabled && hadItems) {
+            const world = this.world;
+            const event: GAS_ClearEvent = {
+                type: GAS_SyncEventType.CLEAR,
+                target: this,
+            };
+            world.syncer.on_self_state_changed(event);
+        }
+    }
+
+    get size(): number {
+        return this.map.size;
+    }
+
+    keys(): IterableIterator<K> {
+        return this.map.keys();
+    }
+
+    values(): IterableIterator<V> {
+        return this.map.values();
+    }
+
+    entries(): IterableIterator<[K, V]> {
+        return this.map.entries();
+    }
+
+    forEach(callbackfn: (value: V, key: K, map: this) => void, thisArg?: any): void {
+        this.map.forEach((value, key) => {
+            callbackfn.call(thisArg, value, key, this);
+        });
+    }
+
+    [Symbol.iterator](): IterableIterator<[K, V]> {
+        return this.map.entries();
+    }
 }
 
-export class GAS_Set<T> extends Set<T> implements IGAS_Object {
-    world: World;
-    gas_id: number;
-    node: GAS_Object;
-
-    get role(): WorldRole {
-        return this.world.role;
-    }
-
-    get owner_player(): Player {
-        return this.node.owner_player;
-    }
-
-    constructor(owner: GAS_Object, gas_id: number) {
-        super();
-        this.gas_id = gas_id?? owner.world.apply_id();
-        this.node = owner;
-        this.world = owner.world;
-        this.world.add_id_state(this, true);
-    }
-
-    get valid(): boolean {
-        return this.world.is_ref_valid(this);
-    }
-
-    syncGASState() {}
-}
-
-export class GAS_Array<T> extends Array<T> implements IGAS_Object {
-    world: World;
-    gas_id: number;
-    node: GAS_Object;
+@GAS_State
+export class GAS_Set<T> extends GAS_Object {
+    private set: Set<T>;
     private _gas_sync_enabled = false;
 
-    get role(): WorldRole {
-        return this.world.role;
+    constructor(owner: GAS_Object, gas_id: number) {
+        super(owner, gas_id);
+        this.set = new Set<T>();
     }
 
-    get owner_player(): Player {
-        return this.node.owner_player;
+    init(init_data?: readonly T[] | null) {
+        if (init_data) {
+            for (const item of init_data) {
+                this.add(item);
+            }
+        }
     }
+
+    add(value: T): this {
+        if (!this.set.has(value)) {
+            this.set.add(value);
+            if (this._gas_sync_enabled) {
+                const event: GAS_PropertyChangedEvent = {
+                    type: GAS_SyncEventType.PropertyChanged,
+                    target: this,
+                    op: GAS_PropertyChangedEventOperatorType.INSERT,
+                    newValue: value,
+                };
+                this.world.syncer.on_self_state_changed(event);
+            }
+        }
+        return this;
+    }
+
+    delete(value: T): boolean {
+        if (this.set.has(value)) {
+            this.set.delete(value);
+            if (this._gas_sync_enabled) {
+                const event: GAS_PropertyChangedEvent = {
+                    type: GAS_SyncEventType.PropertyChanged,
+                    target: this,
+                    op: GAS_PropertyChangedEventOperatorType.REMOVE,
+                    newValue: value,
+                };
+                this.world.syncer.on_self_state_changed(event);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    clear(): void {
+        const hadItems = this.set.size > 0;
+        this.set.clear();
+        if (this._gas_sync_enabled && hadItems) {
+            const world = this.world;
+            const event: GAS_ClearEvent = {
+                type: GAS_SyncEventType.CLEAR,
+                target: this,
+            };
+            world.syncer.on_self_state_changed(event);
+        }
+    }
+
+    public syncGASState(): void {
+        if (this._gas_sync_enabled) {
+            return;
+        }
+        this._gas_sync_enabled = true;
+    
+        const world: World = this.world;
+        if (!world) {
+            return;
+        }
+    
+        const event: GAS_FullSyncEvent = {
+            type: GAS_SyncEventType.FULL_SYNC,
+            target: this,
+        };
+        world.syncer.on_self_state_changed(event);
+    }
+    
+    has(value: T): boolean {
+        return this.set.has(value);
+    }
+
+    get size(): number {
+        return this.set.size;
+    }
+
+    values(): IterableIterator<T> {
+        return this.set.values();
+    }
+
+    keys(): IterableIterator<T> {
+        return this.set.keys();
+    }
+
+    entries(): IterableIterator<[T, T]> {
+        return this.set.entries();
+    }
+
+    forEach(callbackfn: (value: T, value2: T, set: this) => void, thisArg?: any): void {
+        this.set.forEach((value, value2) => {
+            callbackfn.call(thisArg, value, value2, this);
+        });
+    }
+
+    [Symbol.iterator](): IterableIterator<T> {
+        return this.set.values();
+    }
+}
+
+@GAS_State
+export class GAS_Array<T> extends GAS_Object {
+    private array: T[];
+    private _gas_sync_enabled = false;
 
     constructor(owner: GAS_Object, gas_id: number) {
-        super();
-        this.gas_id = gas_id?? owner.world.apply_id();
-        this.node = owner;
-        this.world = owner.world;
-        this.world.add_id_state(this, true);
+        super(owner, gas_id);
+        this.array = [];
+    }
+    
+    get length(): number {
+        return this.array.length;
     }
 
     set(index: number, value: T) {
-        const old_value = this[index];
-        this[index] = value;
+        const old_value = this.array[index];
+        this.array[index] = value;
 
         if (this._gas_sync_enabled && old_value !== value) {
             const world = this.world;
@@ -303,15 +446,11 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
         }
     }
 
-    at(index: number) {
-        return this[index];
+    at(index: number): T | undefined {
+        return this.array[index];
     }
 
-    get valid(): boolean {
-        return this.world.is_ref_valid(this);
-    }
-
-    syncGASState(): void {
+    public syncGASState(): void {
         if (this._gas_sync_enabled) {
             return;
         }
@@ -330,8 +469,8 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
     }
 
     push(...items: T[]): number {
-        const start_index = this.length;
-        const result = super.push(...items);
+        const start_index = this.array.length;
+        const result = this.array.push(...items);
         if (this._gas_sync_enabled && items.length > 0) {
             const world = this.world;
             const event: GAS_PropertyChangedEvent = {
@@ -348,15 +487,15 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
     }
 
     pop(): T | undefined {
-        const had_items = this.length > 0;
-        const result = super.pop();
+        const had_items = this.array.length > 0;
+        const result = this.array.pop();
         if (this._gas_sync_enabled && had_items) {
             const world = this.world;
             const event: GAS_PropertyChangedEvent = {
                 type: GAS_SyncEventType.PropertyChanged,
                 target: this,
                 op: GAS_PropertyChangedEventOperatorType.SPLICE,
-                propertyName: this.length,
+                propertyName: this.array.length,
                 deleteCount: 1,
                 inserted: [],
             };
@@ -366,8 +505,8 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
     }
 
     splice(start: number, deleteCount?: number, ...items: T[]): T[] {
-        const actual_delete_count = deleteCount === undefined ? this.length - start : deleteCount;
-        const result = super.splice(start, deleteCount, ...items);
+        const actual_delete_count = deleteCount === undefined ? this.array.length - start : deleteCount;
+        const result = this.array.splice(start, deleteCount, ...items);
 
         if (this._gas_sync_enabled && (actual_delete_count > 0 || items.length > 0)) {
             const world = this.world;
@@ -385,8 +524,8 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
     }
 
     shift(): T | undefined {
-        const had_items = this.length > 0;
-        const result = super.shift();
+        const had_items = this.array.length > 0;
+        const result = this.array.shift();
         if (this._gas_sync_enabled && had_items) {
             const world = this.world;
             const event: GAS_PropertyChangedEvent = {
@@ -403,7 +542,7 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
     }
 
     unshift(...items: T[]): number {
-        const result = super.unshift(...items);
+        const result = this.array.unshift(...items);
         if (this._gas_sync_enabled && items.length > 0) {
             const world = this.world;
             const event: GAS_PropertyChangedEvent = {
@@ -417,6 +556,10 @@ export class GAS_Array<T> extends Array<T> implements IGAS_Object {
             world.syncer.on_self_state_changed(event);
         }
         return result;
+    }
+
+    [Symbol.iterator](): IterableIterator<T> {
+        return this.array[Symbol.iterator]();
     }
 }
 
@@ -603,6 +746,7 @@ export interface GAS_PropertyMap_Meta_Input {
     key_type: GAS_StateValue;
     value_type: GAS_StateValue;
     ref?: boolean;
+    visible_police?: GAS_Visible_Police;
 }
 
 export function GAS_Property_Map<T extends IGAS_Object>(property_meta_input: GAS_PropertyMap_Meta_Input): (target: T, propertyName: string) => void {
@@ -629,7 +773,7 @@ export function GAS_Property_Array<T extends IGAS_Object>(property_meta_input: G
     return GAS_Property(input);
 }
 
-export function GAS_Property_Ref<T extends IGAS_Object>(property_meta_input: GAS_Property_Meta_Input): (target: T, propertyName: string) => void {
+export function GAS_Ref<T extends IGAS_Object>(property_meta_input: GAS_Property_Meta_Input): (target: T, propertyName: string) => void {
     return GAS_Property({
         ...property_meta_input,
         ref: true,
@@ -640,10 +784,11 @@ export function GAS_Property_Ref<T extends IGAS_Object>(property_meta_input: GAS
 
 export interface GAS_State_Meta_Input {
     client_class_name?: string;
+    visible_police?: GAS_Visible_Police;
 }
 
 export interface GAS_State_Meta extends GAS_State_Meta_Input {
-
+    visible_police: GAS_Visible_Police;
 }
 
 /**
@@ -651,7 +796,7 @@ export interface GAS_State_Meta extends GAS_State_Meta_Input {
  */
 export function GAS_State(arg1?: GAS_State_Meta_Input | (new (...args: any[]) => IGAS_Object)): any {
     const decorator = function <T extends new (...args: any[]) => IGAS_Object>(constructor: T, state_meta_input?: GAS_State_Meta_Input): T {
-        const state_meta: GAS_State_Meta = { ...state_meta_input };
+        const state_meta: GAS_State_Meta = { ...state_meta_input, visible_police: state_meta_input?.visible_police?? GAS_Visible_Police.All };
 
         // --- 预收集和排序逻辑 ---
         const orderedProperties: { propName: string; meta: GAS_Property_Meta }[] = [];
@@ -695,7 +840,7 @@ export function GAS_State(arg1?: GAS_State_Meta_Input | (new (...args: any[]) =>
         // --- 预收集结束 ---
 
         // 创建CLASS_META对象
-        const classMeta = {
+        const classMeta: IGAS_Class_Meta = {
             state_meta,
             gas_property_names: Array.from(seenProperties),
             gas_property_metadata: finalMetaMap,
@@ -716,7 +861,9 @@ export function GAS_State(arg1?: GAS_State_Meta_Input | (new (...args: any[]) =>
             
             get isGASClass() {
                 return classMeta.gas_property_names.length > 0;
-            }
+            },
+
+            class_visible_police: state_meta.visible_police,
         };
 
         const WrappedClass = class extends (constructor as any) {
